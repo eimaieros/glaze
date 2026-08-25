@@ -98,6 +98,44 @@ test('effects that displace also inset, so the clamp is never reached', () => {
   }
 });
 
+/**
+ * Every advertised option must actually reach the shader.
+ *
+ * `displace` shipped with `defaults: { strength: 0.5, scale: 3.0 }` while the
+ * shader hard-coded the 3.0 and never read `scale` anywhere. Passing
+ * `{ scale: 8 }` did nothing, silently, and the option was in the defaults
+ * where anyone would find it. Nothing in the suite noticed, because every test
+ * asked whether the code was correct and none asked whether the API told the
+ * truth.
+ */
+test('every default an effect advertises is wired to something', () => {
+  const COMPONENTES = ['x', 'y', 'z', 'w'];
+
+  for (const [name, e] of Object.entries(EFFECTS)) {
+    const extras = e.extras ?? [];
+    assert.ok(extras.length <= 4,
+      `${name}: only four extra params fit in u.opts, got ${extras.length}`);
+
+    for (const chave of Object.keys(e.defaults)) {
+      // `strength` is universal: the prelude puts it in params.y for everyone.
+      if (chave === 'strength') {
+        assert.match(e.wgsl, /u\.params\.y/, `${name}: declares strength but never reads it`);
+        continue;
+      }
+      const i = extras.indexOf(chave);
+      assert.notEqual(i, -1,
+        `${name}: "${chave}" is in defaults but not in extras — it will be silently ignored`);
+      assert.ok(e.wgsl.includes(`u.opts.${COMPONENTES[i]}`),
+        `${name}: "${chave}" maps to u.opts.${COMPONENTES[i]}, which the shader never reads`);
+    }
+
+    for (const chave of extras) {
+      assert.ok(chave in e.defaults,
+        `${name}: "${chave}" is in extras with no default — callers get 0 if they omit it`);
+    }
+  }
+});
+
 test('the three shipped effects are present', () => {
   assert.deepEqual(Object.keys(EFFECTS).sort(), ['displace', 'reveal', 'rgb']);
 });

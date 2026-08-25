@@ -178,9 +178,23 @@ test('update() packs the uniforms in the order the shader reads them', async () 
   layer.update(12.5, -0.75, { x: 0.2, y: 0.8, near: 0.6 });
 
   // rect | progress, strength, seconds, velocity | aspect, pointerX, pointerY, near
+  //      | scale (displace's only extra), then three unused slots
   // Rounded because the buffer is a Float32Array: 0.4 stores as 0.40000000596.
-  const expected = [-1, 1, 2, 2, 0.4, 0.25, 12.5, -0.75, 1.5, 0.2, 0.8, 0.6];
+  const expected = [-1, 1, 2, 2, 0.4, 0.25, 12.5, -0.75, 1.5, 0.2, 0.8, 0.6,
+                    EFFECTS.displace.defaults.scale, 0, 0, 0];
   assert.deepEqual([...layer.uniforms].map((n) => +n.toFixed(5)), expected);
+});
+
+test('a caller-supplied extra reaches the uniform buffer', () => {
+  const log = [];
+  globalThis.createImageBitmap = async () => ({ width: 2, height: 2, close() {} });
+  const layer = new Layer(fakeImg(log), fakeStage(log), EFFECTS.displace, 'displace',
+    { scale: 14 });
+  layer.update(0, 0, { x: 0, y: 0, near: 0 });   // no load needed: nothing to write to yet
+  layer.ready = true; layer.uniformBuffer = {};  // let update() run its packing
+  layer.update(0, 0, { x: 0, y: 0, near: 0 });
+  assert.equal(layer.uniforms[12], 14,
+    'passing { scale: 14 } must land in u.opts.x — it used to be silently dropped');
 });
 
 test('update() before load() writes nothing', () => {

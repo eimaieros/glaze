@@ -22,7 +22,15 @@
  *   fbm(p)      4-octave value noise
  */
 
-/** @typedef {{ wgsl: string, defaults: Record<string, number> }} Effect */
+/**
+ * @typedef {object} Effect
+ * @property {string} wgsl A fragment stage containing `fn fs`.
+ * @property {Record<string, number>} defaults
+ * @property {string[]} [extras]
+ *   The names of this effect's own scalar parameters, in the order they land
+ *   in `u.opts.xyzw`. Anything in `defaults` other than `strength` must appear
+ *   here, or it is advertised to callers and then silently ignored.
+ */
 
 /**
  * `@satisfies` and not `@type`: it checks every entry has the right shape while
@@ -37,7 +45,17 @@ export const EFFECTS = {
    * travel and settles.
    */
   displace: {
-    defaults: { strength: 0.5, scale: 3.0 },
+    /**
+     * `scale` is the spatial frequency of the warp, and it is the difference
+     * between an effect and a rounding error. At 3.0 - the value this shipped
+     * with - the noise field has three cycles across the image, so the whole
+     * frame slides gently in one direction and nobody notices anything
+     * happened. At 9.0 the contour lines visibly ripple and the image reads as
+     * liquid, which is the point. Past ~14 it stops looking like a material
+     * and starts looking like interference.
+     */
+    defaults: { strength: 0.5, scale: 9.0 },
+    extras: ['scale'],
     wgsl: /* wgsl */ `
 @fragment
 fn fs(@location(0) uv : vec2f) -> @location(0) vec4f {
@@ -46,7 +64,7 @@ fn fs(@location(0) uv : vec2f) -> @location(0) vec4f {
   let s = u.params.y;
 
   // Two noise fields at different rates so the warp never repeats visibly.
-  let p = vec2f(uv.x * u.extra.x, uv.y) * 3.0;
+  let p = vec2f(uv.x * u.extra.x, uv.y) * max(u.opts.x, 0.5);
   let nx = fbm(p + vec2f(t * 0.10, t * 0.06));
   let ny = fbm(p + vec2f(-t * 0.08, t * 0.11) + 17.0);
 
@@ -113,7 +131,12 @@ fn fs(@location(0) uv : vec2f) -> @location(0) vec4f {
 @fragment
 fn fs(@location(0) uv : vec2f) -> @location(0) vec4f {
   let vel = clamp(u.params.w, -1.0, 1.0);
-  let amount = u.params.y * 0.015 * vel;
+  /* 0.03 and not 0.015: at the old coefficient the default strength moved the
+     red and blue taps three pixels apart on a 576px image, which is not an
+     effect, it is a rounding error. At 0.03 the default reads as optics and
+     strength 1.0 reads as a broken screen - which is what the README says
+     happens, and now actually does. */
+  let amount = u.params.y * 0.03 * vel;
 
   // Split vertically, because scrolling is vertical. Splitting on x here is the
   // mistake that makes this effect look pasted on.
@@ -122,7 +145,7 @@ fn fs(@location(0) uv : vec2f) -> @location(0) vec4f {
   // Same inset as displace, and for the same reason: the red and blue taps
   // move in opposite directions, so without it one of them always smears the
   // top or bottom edge on a fast scroll. See the note in the displace effect.
-  let inset = u.params.y * 0.015;
+  let inset = u.params.y * 0.03;
   let base = uv * (1.0 - 2.0 * inset) + inset;
 
   let r = textureSample(tex, samp, clamp(base + off, vec2f(0.0), vec2f(1.0))).r;

@@ -3,13 +3,13 @@
 **GPU effects over the DOM you already have.** Point it at an image, get a
 WebGPU shader driven by scroll. If anything fails, the page keeps its images.
 
-No dependencies. 12.3 KB minified, 5.0 KB gzipped. Ships TypeScript types.
+No dependencies. 13.6 KB minified, 5.6 KB gzipped. Ships TypeScript types.
 
 ```js
 glaze('#hero img', { effect: 'displace' });
 ```
 
-[**Live demo →**](https://eimaieros.github.io/glaze/)
+[**Live demo →**](https://rodrigofigueiredo.dev/glaze/)
 
 ---
 
@@ -89,11 +89,16 @@ glaze('figure img', { effect: 'displace', budget: fb });
 
 ## Effects
 
-| name | driven by | what it does |
-|---|---|---|
-| `displace` | scroll velocity | liquid warp along the direction of travel, weighted to the edges so the subject stays legible |
-| `reveal` | scroll progress | directional mask with a torn, noisy leading edge — an alternative to the opacity fade |
-| `rgb` | scroll velocity | vertical chromatic split |
+| name | driven by | options | what it does |
+|---|---|---|---|
+| `displace` | scroll velocity | `strength`, `scale` | liquid warp along the direction of travel, weighted to the edges so the subject stays legible |
+| `reveal` | scroll progress | `strength` | directional mask with a torn, noisy leading edge — an alternative to the opacity fade |
+| `rgb` | scroll velocity | `strength` | vertical chromatic split |
+
+`scale` is the spatial frequency of the warp — how many ripples fit across the
+image. It defaults to 9; below about 4 the whole frame drifts as one piece and
+you cannot see anything happening, above about 14 it stops reading as a
+material and starts reading as interference.
 
 Writing another one is a single WGSL function:
 
@@ -126,9 +131,26 @@ u.params.w   scroll velocity, normalised and signed
 u.extra.x    aspect ratio (w/h)
 u.extra.yz   pointer position in element space
 u.extra.w    pointer proximity, 1 at the centre, 0 outside
+u.opts.xyzw  this effect's own parameters, in the order it declared them
 uv           0..1 across the element, y down
 fbm(p)       4-octave value noise
 ```
+
+An effect with parameters of its own lists them in `extras`, and they arrive in
+`u.opts` in that order:
+
+```js
+EFFECTS.pinch = {
+  defaults: { strength: 0.5, amount: 0.2 },
+  extras: ['amount'],          // → u.opts.x
+  wgsl: /* … u.opts.x … */,
+};
+```
+
+Anything in `defaults` other than `strength` **must** appear in `extras`.
+`displace` shipped advertising a `scale` default that the shader hard-coded and
+never read, so `{ scale: 8 }` did nothing at all, silently — there is now a test
+that fails on any option that isn't wired to something.
 
 ---
 
@@ -201,18 +223,39 @@ Divide by the element height alone and a tall image appears to lag a small one
 through the same scroll — they animate over different spans. Dividing by
 viewport-plus-element makes every element travel 0→1 over the same gesture.
 
-### 4. Velocity decays, it does not reset
+### 4. Velocity attacks fast and releases slow
 
 ```js
-s.velocity = s.velocity * 0.86 + delta * 0.14;
+const alvo = clamp(delta, -1, 1);
+s.velocity = Math.abs(alvo) > Math.abs(s.velocity)
+  ? alvo                                 // attack: this frame's motion, now
+  : s.velocity * 0.90 + alvo * 0.10;     // release: ~370ms back to rest
 ```
 
-Setting velocity to zero the instant scrolling stops makes the effect snap off,
-which reads as a bug. The decay is what gives it weight, and it costs one
-multiply per frame.
+This was symmetric at first — `v = v*0.86 + delta*0.14` — and that one line made
+the whole library look broken on a mouse.
 
-The corollary matters more: because the velocity-driven effects scale by
-`abs(velocity)`, a still page is a still image. The GPU work goes to
+A symmetric filter of that shape is a low-pass filter. A wheel notch is an
+impulse: Chrome moves about 100px in a single frame and then nothing. Removing
+impulses is precisely what a low-pass filter is for, so one notch only ever
+reached `v ≈ 0.23` — about ten pixels of warp on a 1024px image. One percent.
+Nobody could see it, and the demo looked like it did nothing at all.
+
+It survived because it was only ever checked on a trackpad, where scrolling is
+continuous and the filter behaves perfectly. The input it was tuned for was the
+input that hid the defect.
+
+Rising instantly to the peak and decaying from there leaves the trackpad case
+where it was (0.49 → 0.50) and gives four times the response to a wheel
+(0.23 → 1.00). The release still supplies the weight; zeroing on stop makes the
+effect snap off, which reads as a bug of its own.
+
+`test/velocity.test.js` now asserts a wheel notch moves the image at least 30px,
+because no correctness test can tell "running" apart from "running and
+invisible" — only a number with a floor under it can.
+
+The corollary matters more than either: because the velocity-driven effects
+scale by `abs(velocity)`, a still page is a still image. The GPU work goes to
 approximately nothing when the user isn't doing anything, which is when most
 scroll libraries are still burning battery.
 
@@ -282,7 +325,7 @@ Also exported: `EFFECTS`, `Stage`, `Layer`, `destroyAll()`.
 ## Tests
 
 ```bash
-npm test          # 47 tests, no browser, no GPU
+npm test          # 59 tests, no browser, no GPU
 npm run check     # types + tests
 ```
 
@@ -292,6 +335,7 @@ will ever meet — so the tests run there deliberately.
 | file | what it holds down |
 |---|---|
 | `layer.test.js` | the ordering guarantee: a recording fake device asserts `upload` happens before `hide` |
+| `velocity.test.js` | a wheel notch must produce visible displacement, in pixels |
 | `dom.test.js` | the same promise in real jsdom, which also has no `matchMedia` and no `IntersectionObserver` |
 | `registry.test.js` | clip-space arithmetic, height-independent progress, zero layout reads on a still page |
 | `effects.test.js` | the structural rules the shared pipeline layout depends on |
@@ -300,7 +344,9 @@ will ever meet — so the tests run there deliberately.
 Each guard was checked by breaking it on purpose: hiding the element before the
 upload, swapping `visibility` for `display`, giving an effect its own
 `@group(0)`, deleting the dirty-flag early return, making `init()` throw instead
-of returning `false`. All five were caught, by the test that names the problem.
+of returning `false`, restoring the low-pass velocity filter, and putting
+`scale` back in `defaults` without wiring it. All seven were caught, by the test
+that names the problem.
 
 What none of them can cover is whether the shaders look right. That is what
 `demo/` is for, and there is no substitute for opening it.

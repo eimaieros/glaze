@@ -34,6 +34,8 @@ struct Uniforms {
   params : vec4f,
   // x: aspect ratio  y,z: pointer in element space  w: pointer proximity 0..1
   extra  : vec4f,
+  // Whatever the effect declared in its extras list, in order. Unused slots 0.
+  opts   : vec4f,
 };
 @group(0) @binding(0) var<uniform> u    : Uniforms;
 @group(0) @binding(1) var           samp : sampler;

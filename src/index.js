@@ -161,14 +161,32 @@ function start(s) {
     s.raf = requestAnimationFrame(frame);
 
     /**
-     * Scroll velocity, normalised so that ~60px in a frame reads as 1.0, then
-     * decayed rather than zeroed. Zeroing it the instant scrolling stops makes
-     * the effect snap off; the decay is what makes it feel like it has weight.
+     * Scroll velocity, normalised so ~60px in one frame reads as 1.0.
+     *
+     * FAST ATTACK, SLOW RELEASE — and the asymmetry is the whole point.
+     *
+     * This started as a symmetric filter (`v = v*0.86 + delta*0.14`), which is
+     * a low-pass filter, and it made the library look broken on a mouse. A
+     * wheel notch is an impulse: Chrome moves ~100px in a single frame and
+     * then nothing. Removing impulses is exactly what a low-pass filter does,
+     * so one notch only ever reached v≈0.23 — about ten pixels of displacement
+     * on a 1024px image. One percent. Invisible.
+     *
+     * It measured fine on a trackpad, where scrolling is continuous, which is
+     * how it survived: the case it was tuned for was the case that hid it.
+     *
+     * Rising instantly to the peak and decaying from there gives the same
+     * trackpad response (0.49 -> 0.50) and four times the response to a wheel
+     * (0.23 -> 1.00). The decay is still what gives it weight; zeroing on stop
+     * makes the effect snap off.
      */
     const y = window.scrollY;
     const delta = (y - s.lastScrollY) / 60;
     s.lastScrollY = y;
-    s.velocity = s.velocity * 0.86 + delta * 0.14;
+    const alvo = delta > 1 ? 1 : delta < -1 ? -1 : delta;
+    s.velocity = Math.abs(alvo) > Math.abs(s.velocity)
+      ? alvo                                  // attack: this frame's motion, now
+      : s.velocity * 0.90 + alvo * 0.10;      // release: ~370ms back to rest
     s.pointer.near *= 0.97;
 
     // The tier from framebudget, if the caller gave us one. `minimal` means the

@@ -19,13 +19,13 @@
  * moment the element stops occupying space the effect has nothing to align to.
  */
 
-const UNIFORM_BYTES = 48; // 3 × vec4f
+const UNIFORM_BYTES = 64; // 4 × vec4f — rect, params, extra, opts
 
 export class Layer {
   /**
    * @param {HTMLImageElement} el
    * @param {import('./stage.js').Stage} stage
-   * @param {{ wgsl: string, defaults: Record<string, number> }} effect
+   * @param {{ wgsl: string, defaults: Record<string, number>, extras?: string[] }} effect
    * @param {string} effectName
    * @param {Record<string, any>} opts
    */
@@ -35,6 +35,14 @@ export class Layer {
     this.effect = effect;
     this.effectName = effectName;
     this.opts = { ...effect.defaults, ...opts };
+    /**
+     * The effect's own scalar parameters, in the order it declared them; they
+     * land in `u.opts.xyzw`. Before this existed, `displace` advertised a
+     * `scale` default that the shader hard-coded and never read — passing
+     * `{ scale: 8 }` did nothing at all, silently. An option that lies is
+     * worse than a missing one.
+     */
+    this.extras = (effect.extras ?? []).slice(0, 4);
 
     this.ready = false;
     this.visible = false;
@@ -53,7 +61,7 @@ export class Layer {
     this.uniformBuffer = null;
     /** @type {GPURenderPipeline|null} */
     this.pipeline = null;
-    this.uniforms = new Float32Array(12);
+    this.uniforms = new Float32Array(16);
     this._previousVisibility = '';
   }
 
@@ -139,6 +147,10 @@ export class Layer {
     u[9] = pointer.x;
     u[10] = pointer.y;
     u[11] = pointer.near;
+    for (let i = 0; i < 4; i++) {
+      const chave = this.extras[i];
+      u[12 + i] = chave ? (this.opts[chave] ?? 0) : 0;
+    }
     device.queue.writeBuffer(this.uniformBuffer, 0, u);
   }
 

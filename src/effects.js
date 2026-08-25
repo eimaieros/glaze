@@ -58,7 +58,19 @@ fn fs(@location(0) uv : vec2f) -> @location(0) vec4f {
   // Displacement is stronger away from the centre, so edges move and the
   // subject of the photo stays legible.
   let edge = smoothstep(0.0, 0.55, length(uv - 0.5));
-  let warped = uv + dir * amount * edge;
+
+  /* Sample from an inset rectangle so the displacement always has real pixels
+     to pull from. Without this, a fast scroll pushes the sample past 1.0, the
+     clamp below repeats the edge pixel, and a smeared band appears down the
+     side of the image - which reads as a broken renderer, not as an effect.
+
+     The inset is sized to the worst case the strength allows, not to this
+     frame's displacement. Sizing it per-frame would make the crop breathe
+     with scroll speed, and the image would appear to zoom while you scroll.
+     At strength 0 the inset is 0, so nothing is cropped. */
+  let inset = s * 0.06;
+  let base = uv * (1.0 - 2.0 * inset) + inset;
+  let warped = base + dir * amount * edge;
 
   return textureSample(tex, samp, clamp(warped, vec2f(0.0), vec2f(1.0)));
 }`,
@@ -107,9 +119,15 @@ fn fs(@location(0) uv : vec2f) -> @location(0) vec4f {
   // mistake that makes this effect look pasted on.
   let off = vec2f(0.0, amount) * smoothstep(0.0, 0.7, length(uv - 0.5));
 
-  let r = textureSample(tex, samp, clamp(uv + off, vec2f(0.0), vec2f(1.0))).r;
-  let g = textureSample(tex, samp, uv);
-  let b = textureSample(tex, samp, clamp(uv - off, vec2f(0.0), vec2f(1.0))).b;
+  // Same inset as displace, and for the same reason: the red and blue taps
+  // move in opposite directions, so without it one of them always smears the
+  // top or bottom edge on a fast scroll. See the note in the displace effect.
+  let inset = u.params.y * 0.015;
+  let base = uv * (1.0 - 2.0 * inset) + inset;
+
+  let r = textureSample(tex, samp, clamp(base + off, vec2f(0.0), vec2f(1.0))).r;
+  let g = textureSample(tex, samp, base);
+  let b = textureSample(tex, samp, clamp(base - off, vec2f(0.0), vec2f(1.0))).b;
   return vec4f(r, g.g, b, g.a);
 }`,
   },

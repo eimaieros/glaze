@@ -206,16 +206,36 @@ const b = glaze('#b', { effect: 'reveal' });
 const c = glaze('#c', { effect: 'rgb', strength: 0.35 });
 
 /* The HUD says what actually happened, including when nothing did. A demo that
-   only shows the happy path teaches you nothing about the library. */
+   only shows the happy path teaches you nothing about the library.
+
+   It counts real layers rather than reading `active`. The first version showed
+   "3 running" whenever the GPU device existed, which was true on a page where
+   nothing was being drawn at all — a status light wired to the wrong thing is
+   worse than no status light. `fps` is measured, for the same reason: Chrome
+   suspends requestAnimationFrame entirely in a hidden tab, and without this
+   you cannot tell that apart from a bug. */
 const hud = document.getElementById('hud');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+let frames = 0, ultimo = performance.now(), fps = 0;
+(function conta() {
+  frames++;
+  const agora = performance.now();
+  if (agora - ultimo >= 500) {
+    fps = Math.round(frames * 1000 / (agora - ultimo));
+    frames = 0; ultimo = agora;
+  }
+  requestAnimationFrame(conta);
+})();
+
 setInterval(() => {
-  const on = a.active;
+  const camadas = a.elements.length + b.elements.length + c.elements.length;
   hud.innerHTML =
     `webgpu <b>${navigator.gpu ? 'yes' : 'no'}</b><br>` +
     `reduced motion <b>${reduced ? 'yes' : 'no'}</b><br>` +
-    `effects <b>${on ? '3 running' : '0'}</b><br>` +
-    (on ? '' : '<span class="warn">images shown as-is</span>');
+    `layers <b>${camadas}</b><br>` +
+    `fps <b>${document.hidden ? 'tab hidden' : fps}</b><br>` +
+    (camadas ? '' : '<span class="warn">images shown as-is</span>');
 }, 400);
 </script>
 

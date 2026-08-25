@@ -58,11 +58,43 @@ test('every effect samples the texture — an effect that ignores it is a bug', 
 test('sampling coordinates are clamped wherever they are offset', () => {
   // Reading outside 0..1 gives you the edge pixel smeared across the frame,
   // which looks like a rendering bug and is the most common mistake in this
-  // kind of shader. If an effect adds an offset, it has to clamp.
+  // kind of shader. If an effect moves its sample, it has to clamp.
   for (const [name, e] of Object.entries(EFFECTS)) {
-    const offsets = e.wgsl.includes('uv +') || e.wgsl.includes('uv -');
-    if (!offsets) continue;
-    assert.match(e.wgsl, /clamp\(/, `${name}: offsets uv but never clamps`);
+    if (!/(base|uv)\s*[+-]\s/.test(e.wgsl)) continue;
+    assert.match(e.wgsl, /clamp\(/, `${name}: offsets its sample but never clamps`);
+  }
+});
+
+/**
+ * Clamping stops the read going out of bounds; it does NOT stop it looking
+ * wrong. Once a sample is clamped you get the edge pixel repeated down the
+ * side of the image, and on the live demo that was a visible pink band on
+ * every fast scroll — the exact defect the test above claims to prevent.
+ *
+ * The fix is to never need the clamp: sample from a rectangle inset by the
+ * most the effect can possibly displace, so there are always real pixels to
+ * pull from. This test exists because the clamp test passed the whole time
+ * the smear was on screen.
+ */
+test('effects that displace also inset, so the clamp is never reached', () => {
+  // Only effects that clamp a *sampling coordinate* are in scope. `reveal`
+  // clamps its progress value, which has nothing to do with edge smearing —
+  // an earlier version of this test failed it, which is worth remembering:
+  // a guard that fires on the wrong thing gets disabled, not fixed.
+  const clampsUmaAmostra = (w) => /textureSample\s*\([^)]*clamp\s*\(/.test(w);
+
+  for (const [name, e] of Object.entries(EFFECTS)) {
+    if (!clampsUmaAmostra(e.wgsl)) continue;
+    assert.match(e.wgsl, /let\s+inset\s*=/,
+      `${name}: clamps a moved sample but never insets — the clamp will smear the edge`);
+    assert.match(e.wgsl, /uv\s*\*\s*\(1\.0\s*-\s*2\.0\s*\*\s*inset\)\s*\+\s*inset/,
+      `${name}: inset must remap uv into the safe rectangle`);
+    // Per-frame insets make the crop breathe with scroll speed, which reads
+    // as the image zooming. The inset may depend on strength, never on
+    // velocity (params.w) or time (params.z).
+    const linha = e.wgsl.match(/let\s+inset\s*=.*/)[0];
+    assert.doesNotMatch(linha, /params\.[zw]|vel|\bt\b/,
+      `${name}: the inset must be constant per element, not per frame — got: ${linha.trim()}`);
   }
 });
 

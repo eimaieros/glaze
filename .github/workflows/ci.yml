@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push: { branches: [main] }
+  pull_request: { branches: [main] }
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm ci || npm install
+      - run: npm test
+      # Redundant on paper - `prepare` already ran tsc during install - but kept
+      # explicit so a type error is its own failed step instead of hiding inside
+      # the install output.
+      - run: npm run types

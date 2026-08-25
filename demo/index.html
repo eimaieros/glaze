@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>glaze — GPU effects over the DOM you already have</title>
+<style>
+  :root{
+    --bg:#070709; --fg:#eeeef0; --dim:#8a8a95; --acc:#ff3d1f;
+    --line:rgba(255,255,255,.09);
+    --mono:ui-monospace,'JetBrains Mono',SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);color:var(--fg);
+    font:400 16px/1.65 ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 28px}
+
+  header{min-height:88vh;display:flex;flex-direction:column;justify-content:center;gap:26px}
+  h1{font-size:clamp(3rem,11vw,8rem);line-height:.86;letter-spacing:-.045em;font-weight:800}
+  h1 em{font-style:normal;color:var(--acc)}
+  .lede{max-width:52ch;color:var(--dim);font-size:clamp(1rem,1.5vw,1.2rem)}
+  .lede b{color:var(--fg);font-weight:500}
+
+  code,.k{font-family:var(--mono);font-size:.86em}
+  pre{
+    background:#0d0d11;border:1px solid var(--line);border-radius:6px;
+    padding:18px 20px;overflow-x:auto;font-family:var(--mono);font-size:.82rem;
+    line-height:1.7;color:#c9c9d2;
+  }
+  pre .c{color:#5f5f6b}
+  pre .s{color:var(--acc)}
+
+  section{padding:16vh 0;border-top:1px solid var(--line)}
+  .tag{
+    font-family:var(--mono);font-size:.68rem;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--acc);margin-bottom:14px;display:block;
+  }
+  h2{font-size:clamp(1.7rem,4vw,2.8rem);line-height:1.05;letter-spacing:-.03em;margin-bottom:16px;font-weight:700}
+  section p{max-width:56ch;color:var(--dim);margin-bottom:26px}
+
+  figure{margin:38px 0 0}
+  figure img{
+    width:100%;aspect-ratio:16/9;object-fit:cover;display:block;
+    border:1px solid var(--line);border-radius:4px;
+  }
+  figcaption{
+    font-family:var(--mono);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--dim);margin-top:12px;
+  }
+
+  .hud{
+    position:fixed;right:16px;bottom:16px;z-index:9;
+    font-family:var(--mono);font-size:.68rem;line-height:1.8;
+    background:rgba(10,10,14,.86);backdrop-filter:blur(8px);
+    border:1px solid var(--line);border-left:2px solid var(--acc);
+    border-radius:4px;padding:11px 14px;color:var(--dim);
+    min-width:190px;
+  }
+  .hud b{color:var(--fg);font-weight:500;float:right}
+  .hud .warn{color:var(--acc)}
+
+  footer{padding:14vh 0 20vh;border-top:1px solid var(--line);color:var(--dim)}
+  a{color:var(--acc)}
+</style>
+</head>
+<body>
+
+<div class="hud" id="hud">booting…</div>
+
+<div class="wrap">
+
+  <header>
+    <span class="tag">WebGPU · zero dependencies</span>
+    <h1>glaze<em>.</em></h1>
+    <p class="lede">
+      GPU effects over the DOM you already have. Point it at an image, get a
+      shader. <b>If anything fails — no WebGPU, a dead device, reduced motion —
+      the page keeps its images.</b> Safari only enabled WebGPU by default in
+      26.0; plenty of real visitors still have none of it, and none of them
+      should see a hole.
+    </p>
+<pre><span class="c">// that's the whole API</span>
+<span class="s">glaze</span>(<span class="s">'#hero img'</span>, { effect: <span class="s">'displace'</span> });</pre>
+  </header>
+
+  <section>
+    <span class="tag">01 — displace</span>
+    <h2>Warps with the scroll, and only with the scroll</h2>
+    <p>
+      A still page is an untouched image. The displacement is driven by scroll
+      velocity, so the effect costs nothing when nothing is happening — and the
+      warp is weighted towards the edges, so the subject stays legible while
+      the frame moves.
+    </p>
+    <figure>
+      <img id="a" alt="Generated gradient field, displaced on scroll">
+      <figcaption>scroll · velocity-driven displacement</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <span class="tag">02 — reveal</span>
+    <h2>An edge that tears instead of fading</h2>
+    <p>
+      Opacity fades read as a loading state. This is a directional mask with a
+      noisy leading edge driven by scroll progress: the image arrives as
+      material rather than as a CSS transition.
+    </p>
+    <figure>
+      <img id="b" alt="Generated field, revealed with a torn edge">
+      <figcaption>scroll · progress-driven reveal</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <span class="tag">03 — rgb</span>
+    <h2>Chromatic split, kept honest</h2>
+    <p>
+      The split is vertical because scrolling is vertical — splitting on the
+      other axis is the mistake that makes this effect look pasted on. Past
+      about <code>0.4</code> strength it stops reading as optics and starts
+      reading as a broken screen, so the default is well under that.
+    </p>
+    <figure>
+      <img id="c" alt="Generated field with chromatic aberration on scroll">
+      <figcaption>scroll · velocity-driven chromatic split</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <span class="tag">04 — the part that matters</span>
+    <h2>It never removes your content</h2>
+    <p>
+      Each image is hidden only <em>after</em> its texture has decoded and
+      uploaded, and it is put back exactly as it was found on
+      <code>destroy()</code>. Turn off WebGPU in your browser flags and reload:
+      the page looks like an ordinary page, because it is one.
+    </p>
+<pre><span class="c">// pass framebudget in and glaze degrades itself under load</span>
+<span class="c">// https://github.com/eimaieros/framebudget</span>
+<span class="s">glaze</span>(<span class="s">'figure img'</span>, { effect: <span class="s">'displace'</span>, budget: fb });</pre>
+  </section>
+
+  <footer>
+    <p>
+      MIT · <a href="https://github.com/eimaieros/glaze">github.com/eimaieros/glaze</a>
+      · built by <a href="https://rodrigofigueiredo.dev">Rodrigo Figueiredo</a>
+    </p>
+  </footer>
+
+</div>
+
+<script type="module">
+import { glaze } from '../src/index.js';
+
+/* The imagery is generated rather than shipped: it keeps the demo a single
+   self-contained file, and a displacement effect reads more clearly on a
+   continuous field than on a photograph anyway. */
+function field(seed, hueA, hueB) {
+  const w = 1280, h = 720;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const x = c.getContext('2d');
+
+  const g = x.createLinearGradient(0, 0, w, h);
+  g.addColorStop(0, `hsl(${hueA} 62% 12%)`);
+  g.addColorStop(.5, `hsl(${(hueA + hueB) / 2} 54% 26%)`);
+  g.addColorStop(1, `hsl(${hueB} 70% 9%)`);
+  x.fillStyle = g; x.fillRect(0, 0, w, h);
+
+  // Contour bands — they make displacement obvious, which is the point of a demo.
+  let s = seed;
+  const rnd = () => (s = (s * 1103515245 + 12345) % 2147483648) / 2147483648;
+  x.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 42; i++) {
+    x.beginPath();
+    const y0 = rnd() * h;
+    x.moveTo(0, y0);
+    for (let px = 0; px <= w; px += 24) {
+      x.lineTo(px, y0 + Math.sin(px * 0.006 + i) * 60 + Math.sin(px * 0.019 + i * 2) * 22);
+    }
+    x.strokeStyle = `hsla(${hueB} 90% 62% / ${0.03 + rnd() * 0.07})`;
+    x.lineWidth = 1 + rnd() * 2.5;
+    x.stroke();
+  }
+  x.globalCompositeOperation = 'source-over';
+  return c.toDataURL('image/png');
+}
+
+const imgs = [
+  ['a', field(7, 12, 340)],
+  ['b', field(23, 200, 260)],
+  ['c', field(91, 28, 8)],
+];
+await Promise.all(imgs.map(([id, src]) => new Promise((res) => {
+  const el = document.getElementById(id);
+  el.onload = res; el.onerror = res; el.src = src;
+})));
+
+const a = glaze('#a', { effect: 'displace', strength: 0.7 });
+const b = glaze('#b', { effect: 'reveal' });
+const c = glaze('#c', { effect: 'rgb', strength: 0.35 });
+
+/* The HUD says what actually happened, including when nothing did. A demo that
+   only shows the happy path teaches you nothing about the library. */
+const hud = document.getElementById('hud');
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+setInterval(() => {
+  const on = a.active;
+  hud.innerHTML =
+    `webgpu <b>${navigator.gpu ? 'yes' : 'no'}</b><br>` +
+    `reduced motion <b>${reduced ? 'yes' : 'no'}</b><br>` +
+    `effects <b>${on ? '3 running' : '0'}</b><br>` +
+    (on ? '' : '<span class="warn">images shown as-is</span>');
+}, 400);
+</script>
+
+</body>
+</html>

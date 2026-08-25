@@ -1,0 +1,50 @@
+{
+  "name": "glaze",
+  "version": "0.1.0",
+  "description": "GPU effects over the DOM you already have. WebGPU, scroll-driven, and it never removes your content.",
+  "type": "module",
+  "main": "./src/index.js",
+  "types": "./types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "types",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "types": "node tools/clean-types.js && tsc",
+    "check": "npm run types && npm test",
+    "prepare": "npm run types"
+  },
+  "keywords": [
+    "webgpu",
+    "wgsl",
+    "scroll",
+    "animation",
+    "shader",
+    "effects",
+    "frontend",
+    "performance",
+    "progressive-enhancement"
+  ],
+  "author": "Rodrigo Figueiredo <eimaieros@gmail.com> (https://rodrigofigueiredo.dev)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eimaieros/glaze.git"
+  },
+  "homepage": "https://github.com/eimaieros/glaze",
+  "sideEffects": false,
+  "devDependencies": {
+    "@webgpu/types": "^0.1.72",
+    "jsdom": "^30.0.1",
+    "typescript": "^5.6.0"
+  }
+}

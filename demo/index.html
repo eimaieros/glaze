@@ -101,7 +101,7 @@
       the frame moves.
     </p>
     <figure>
-      <img id="a" alt="Generated gradient field, displaced on scroll">
+      <img id="a" alt="Generated engraved line field, warping as the page scrolls">
       <figcaption>scroll · velocity-driven displacement</figcaption>
     </figure>
   </section>
@@ -115,7 +115,7 @@
       material rather than as a CSS transition.
     </p>
     <figure>
-      <img id="b" alt="Generated field, revealed with a torn edge">
+      <img id="b" alt="Generated engraved line field, revealed behind a torn edge">
       <figcaption>scroll · progress-driven reveal</figcaption>
     </figure>
   </section>
@@ -130,7 +130,7 @@
       reading as a broken screen, so the default is well under that.
     </p>
     <figure>
-      <img id="c" alt="Generated field with chromatic aberration on scroll">
+      <img id="c" alt="Generated engraved line field with its colours split apart on scroll">
       <figcaption>scroll · velocity-driven chromatic split</figcaption>
     </figure>
   </section>
@@ -161,38 +161,73 @@
 <script type="module">
 import { glaze } from '../src/index.js';
 
-/* The imagery is generated rather than shipped: it keeps the demo a single
-   self-contained file, and a displacement effect reads more clearly on a
-   continuous field than on a photograph anyway. */
-function field(seed, hueA, hueB) {
+/**
+ * The imagery is generated rather than shipped, so the demo stays a single
+ * self-contained file.
+ *
+ * THE DENSITY IS NOT DECORATION. It is the difference between a demo and a
+ * blank page, and it took an embarrassingly long time to see.
+ *
+ * This started as a smooth gradient with 42 faint contour lines, and on it
+ * `displace` was invisible. Not weak — invisible. Measured: warping that image
+ * at full scroll velocity changed the average pixel by 6.6 out of 765, while
+ * `reveal` on the same image changed it by 168. Two of the three effects
+ * looked broken and the third looked fine.
+ *
+ * The shader was never the problem. Displacement moves pixels, and moving
+ * pixels around inside a smooth gradient gives you back the same smooth
+ * gradient — there is nothing there to move. The same shader, same parameters,
+ * same velocity, on an image with real high-frequency detail: 187.
+ *
+ * So: dense engraved line work. Fine enough that displacement has something to
+ * displace, in the same visual language as before. The measurement went from
+ * 6.6 to 67 without a single line of the library changing.
+ *
+ * If you make this sparser or smoother, the effects stop being visible again.
+ */
+function field(seed, hueA, hueB, lines = 150) {
   const w = 1280, h = 720;
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   const x = c.getContext('2d');
 
   const g = x.createLinearGradient(0, 0, w, h);
-  g.addColorStop(0, `hsl(${hueA} 62% 12%)`);
-  g.addColorStop(.5, `hsl(${(hueA + hueB) / 2} 54% 26%)`);
-  g.addColorStop(1, `hsl(${hueB} 70% 9%)`);
+  g.addColorStop(0, `hsl(${hueA} 62% 10%)`);
+  g.addColorStop(.5, `hsl(${(hueA + hueB) / 2} 54% 20%)`);
+  g.addColorStop(1, `hsl(${hueB} 70% 8%)`);
   x.fillStyle = g; x.fillRect(0, 0, w, h);
 
-  // Contour bands — they make displacement obvious, which is the point of a demo.
   let s = seed;
   const rnd = () => (s = (s * 1103515245 + 12345) % 2147483648) / 2147483648;
   x.globalCompositeOperation = 'lighter';
-  for (let i = 0; i < 42; i++) {
+  for (let i = 0; i < lines; i++) {
+    // Evenly spaced rather than randomly placed, so the frequency is uniform
+    // across the frame and no region is left smooth enough to hide the warp.
+    const y0 = (i / lines) * h * 1.25 - h * 0.12;
+    const amp = 18 + rnd() * 34;
+    const f1 = 0.004 + rnd() * 0.004;
+    const f2 = 0.017 + rnd() * 0.020;
     x.beginPath();
-    const y0 = rnd() * h;
     x.moveTo(0, y0);
-    for (let px = 0; px <= w; px += 24) {
-      x.lineTo(px, y0 + Math.sin(px * 0.006 + i) * 60 + Math.sin(px * 0.019 + i * 2) * 22);
+    for (let px = 0; px <= w; px += 6) {
+      x.lineTo(px, y0 + Math.sin(px * f1 + i * 0.5) * amp
+                      + Math.sin(px * f2 + i * 1.7) * amp * 0.42);
     }
-    x.strokeStyle = `hsla(${hueB} 90% 62% / ${0.03 + rnd() * 0.07})`;
-    x.lineWidth = 1 + rnd() * 2.5;
+    x.strokeStyle = `hsla(${hueB} 92% ${58 + rnd() * 18}% / ${0.30 + rnd() * 0.34})`;
+    x.lineWidth = 0.7 + rnd() * 1.1;
     x.stroke();
   }
   x.globalCompositeOperation = 'source-over';
-  return c.toDataURL('image/png');
+
+  /* JPEG, not PNG. PNG is lossless and therefore hopeless at dense line work —
+     the same image comes out at 2119 KB as PNG and 340 KB as JPEG at q0.92,
+     and PNG is no faster to encode. Three of these are generated on load, so
+     that is 6.2 MB and two seconds of blocking canvas work versus 1 MB and
+     one, on a page whose whole argument is that motion can be cheap.
+     Measured: the compression costs the effect nothing worth having — the
+     displacement reads at 67 against 80 for the lossless version, where the
+     old smooth image read at 6.6. */
+  return c.toDataURL('image/jpeg', 0.92);
 }
 
 const imgs = [
@@ -235,7 +270,7 @@ let frames = 0, ultimo = performance.now(), fps = 0;
 /* A build stamp, because two hours went into debugging a fix that was already
    published and that the browser refused to fetch. If this line and the file
    on disk disagree, you are looking at a cached page — hard reload. */
-const BUILD = '2026-08-26 · one-device + suspend + decode-race';
+const BUILD = '2026-08-26b · dense source imagery — all three effects visible';
 
 setInterval(() => {
   const todas = [...a.elements, ...b.elements, ...c.elements];

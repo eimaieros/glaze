@@ -101,6 +101,29 @@ image. It defaults to 9; below about 4 the whole frame drifts as one piece and
 you cannot see anything happening, above about 14 it stops reading as a
 material and starts reading as interference.
 
+### These effects need something to move
+
+`displace` and `rgb` move pixels around. `reveal` changes them. That difference
+decides whether you can see anything, and it is a property of **your image**,
+not of the library.
+
+Move pixels around inside a smooth gradient and you get back the same smooth
+gradient. There is nothing there to move. Measured on this demo, same shader,
+same parameters, same scroll velocity — average change per pixel, out of 765:
+
+| source image | `displace` | `rgb` | `reveal` |
+|---|---|---|---|
+| smooth gradient, sparse lines | **6.6** | **5.0** | 168 |
+| dense line work, fine detail | **67** | **69** | 192 |
+
+Ten times more visible, with no code change at all. The demo shipped with
+the first kind of image, and for three rounds of debugging two of the three
+effects looked broken.
+
+So: use these on photographs, textures, type, artwork — anything with detail at
+the scale the warp moves things. On a soft gradient or a heavily blurred image,
+reach for `reveal`, which does not depend on what is underneath.
+
 Writing another one is a single WGSL function:
 
 ```js

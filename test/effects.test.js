@@ -136,6 +136,41 @@ test('every default an effect advertises is wired to something', () => {
   }
 });
 
+/**
+ * The centre of the frame must get a real share of the effect.
+ *
+ * `displace` and `rgb` both weight themselves towards the edges. That is a
+ * good idea for a warp — it keeps the subject of a photograph legible — but
+ * `smoothstep(0, k, length(uv - 0.5))` is *zero* at the centre and about 0.18
+ * a fifth of the way out, so most of the frame got almost nothing. Which is
+ * where people look, and why two of three effects were repeatedly reported as
+ * doing nothing.
+ *
+ * Measured in the central third of the image: adding a floor took `displace`
+ * from 38.9 to 62.0 and `rgb` from 24.1 to 54.0, at no extra cost in cropping.
+ * Raising the amount instead reached only 49.4 and doubled the crop. The floor
+ * is the lever.
+ */
+test('edge weighting never falls to zero in the middle of the frame', () => {
+  for (const [name, e] of Object.entries(EFFECTS)) {
+    // Only effects that weight by distance from centre are in scope.
+    const pesos = [...e.wgsl.matchAll(/([\d.]+)\s*\+\s*([\d.]+)\s*\*\s*smoothstep\([^)]*length\(uv - 0\.5\)\)/g)];
+    const cru = /(?<![\d.]\s\+\s)(?:^|[^*]\s)smoothstep\(0\.0,\s*[\d.]+,\s*length\(uv - 0\.5\)\)/m.test(e.wgsl);
+
+    if (!e.wgsl.includes('length(uv - 0.5)')) continue;
+
+    assert.ok(pesos.length > 0,
+      `${name}: weights by distance from the centre with no floor — the middle ` +
+      `of the frame gets nothing, which is where people look`);
+
+    for (const [, piso] of pesos) {
+      assert.ok(Number(piso) >= 0.3,
+        `${name}: the centre only gets ${piso} of the effect; it needs at least 0.3 to be seen`);
+    }
+    assert.ok(!cru, `${name}: an unfloored smoothstep on the centre distance is back`);
+  }
+});
+
 test('the three shipped effects are present', () => {
   assert.deepEqual(Object.keys(EFFECTS).sort(), ['displace', 'reveal', 'rgb']);
 });

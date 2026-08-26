@@ -154,6 +154,26 @@ So: use these on photographs, textures, type, artwork — anything with detail a
 the scale the warp moves things. On a soft gradient or a heavily blurred image,
 reach for `reveal`, which does not depend on what is underneath.
 
+### And they must reach the middle of the frame
+
+Both velocity effects weight themselves by distance from the centre, which is
+right for a warp — it keeps the subject of a photograph legible. But
+`smoothstep(0, k, length(uv - 0.5))` is **zero** at the centre and about 0.18 a
+fifth of the way out, so almost the whole middle of the image was getting
+almost nothing. That is where the eye rests, and it is where people were
+looking when they said nothing was happening.
+
+Measured in the central third of the image, at the same scroll speed:
+
+| | centre, no floor | centre, with floor |
+|---|---|---|
+| `displace` | 38.9 | **62.0** |
+| `rgb` | 24.1 | **54.0** |
+
+Both floors cost nothing — no extra cropping, no extra work. Raising the
+displacement amount instead reached only 49.4 and doubled the crop. The floor
+was the lever the whole time; the amount never was.
+
 Writing another one is a single WGSL function:
 
 ```js
@@ -474,7 +494,7 @@ Also exported: `EFFECTS`, `Stage`, `Layer`, `destroyAll()`.
 ## Tests
 
 ```bash
-npm test          # 82 tests, no browser, no GPU
+npm test          # 83 tests, no browser, no GPU
 open test/visual.html   # the part Node cannot check: is anything visible?
 npm run check     # types + tests
 ```

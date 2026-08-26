@@ -20,8 +20,9 @@
   "scripts": {
     "test": "node --test test/*.test.js",
     "types": "node tools/clean-types.js && tsc",
-    "check": "npm run types && npm test",
-    "prepare": "npm run types"
+    "check": "npm run types && npm test && npm run size",
+    "prepare": "npm run types",
+    "size": "node tools/tamanho.js"
   },
   "keywords": [
     "webgpu",
@@ -45,7 +46,8 @@
   "devDependencies": {
     "@webgpu/types": "^0.1.72",
     "jsdom": "^30.0.1",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "esbuild": "^0.25.0"
   },
   "bugs": {
     "url": "https://github.com/eimaieros/glaze/issues"

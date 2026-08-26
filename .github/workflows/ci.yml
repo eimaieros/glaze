@@ -28,3 +28,9 @@ jobs:
       # explicit so a type error is its own failed step instead of hiding inside
       # the install output.
       - run: npm run types
+
+      # The README states a minified size in two places. Both were true when
+      # they were written and both went quietly false the moment a module was
+      # added. A number typed into prose is a measurement with no instrument
+      # behind it; this is the instrument.
+      - run: npm run size

@@ -174,6 +174,28 @@ Both floors cost nothing — no extra cropping, no extra work. Raising the
 displacement amount instead reached only 49.4 and doubled the crop. The floor
 was the lever the whole time; the amount never was.
 
+### `rgb` needs the image to have colours to split
+
+Chromatic aberration separates the red and blue channels, so it needs both to
+be there. On a near-monochrome image one ghost is strong, the other is
+swallowed by what surrounds it, and the result reads as a slightly blurred line
+rather than as a fringe.
+
+The demo's third image was two neighbouring reds — R=248 G=106 B=84 — and the
+effect was invisible on it while measuring 54 on a raw pixel difference. The
+number was right and the metric was wrong: what the eye reads as aberration is
+a shift in **hue**, not in brightness.
+
+| palette | hue shift | visible? |
+|---|---|---|
+| two reds (28° → 8°) | 21.7° | no |
+| red / blue (20° → 250°) | 43.4° | yes |
+| teal / violet (30° → 300°) | **61.1°** | unmistakable |
+
+So `rgb` belongs on images with some colour range in them. On a duotone, a
+sepia photograph or anything close to monochrome, use `displace` — it moves
+pixels and does not care what colour they are.
+
 Writing another one is a single WGSL function:
 
 ```js

@@ -85,31 +85,43 @@ function field(seed, hueA, hueB, lines = 150) {
   return c.toDataURL('image/jpeg', 0.92);
 }
 
-/** The velocity filter from src/index.js, applied to a position curve. */
-function velocidade(deltasPx) {
+/** The velocity filter from src/index.js: pixels per second, not per frame. */
+function velocidade(amostras) {
   let v = 0, pico = 0;
-  for (const px of deltasPx) {
-    const delta = px / 30;
-    const alvo = delta > 1 ? 1 : delta < -1 ? -1 : delta;
-    v = Math.abs(alvo) > Math.abs(v) ? alvo : v * 0.90 + alvo * 0.10;
+  for (const [px, dtMs] of amostras) {
+    const dt = Math.min(Math.max(dtMs, 1), 100);
+    let alvo = px / (dt / 1000) / 1800;
+    alvo = alvo > 1 ? 1 : alvo < -1 ? -1 : alvo;
+    const decay = Math.pow(0.90, dt / 16.667);
+    v = Math.abs(alvo) > Math.abs(v) ? alvo : v * decay + alvo * (1 - decay);
     if (Math.abs(v) > Math.abs(pico)) pico = v;
   }
   return pico;
 }
+
+/** Whatever this display actually runs at — that used to change the answer. */
+const HZ = await new Promise((r) => {
+  let n = 0; const t0 = performance.now();
+  const tick = () => (++n < 20 ? requestAnimationFrame(tick)
+                               : r(Math.round(n * 1000 / (performance.now() - t0))));
+  requestAnimationFrame(tick);
+});
+const DT = 1000 / HZ;
+
 /** A wheel notch under scroll-behavior:smooth / Lenis: 100px eased over 300ms. */
 const suave = (() => {
-  const n = 18, pos = [];
+  const n = Math.max(1, Math.round(0.3 * HZ)), pos = [];
   for (let i = 0; i <= n; i++) pos.push(100 * (1 - Math.pow(1 - i / n, 3)));
-  return Array.from({ length: n }, (_, i) => pos[i + 1] - pos[i]);
+  return Array.from({ length: n }, (_, i) => [pos[i + 1] - pos[i], DT]);
 })();
 
 const V_SUAVE  = velocidade(suave);
-const V_NATIVA = velocidade([100, 0, 0, 0]);
+const V_NATIVA = velocidade([[100, DT]]);
 
 const el = document.createElement('img');
 el.style.cssText = 'position:fixed;left:-9999px;top:0;width:1024px';
 document.body.appendChild(el);
-await new Promise((r) => { el.onload = r; el.onerror = r; el.src = field(7, 12, 340); });
+await new Promise((r) => { el.onload = r; el.onerror = r; el.src = field(91, 30, 300); });
 
 const stage = new Stage();
 const arrancou = await stage.init();
@@ -137,6 +149,43 @@ if (!arrancou) {
     const cx = ler(); L.destroy();
     return cx;
   }
+  /**
+   * Average hue shift, in degrees, across the central third.
+   *
+   * The raw pixel difference below said `rgb` scored 54 on an image where the
+   * effect was completely invisible — because the image was two shades of red,
+   * so shifting the channels changed brightness without changing colour. What
+   * the eye reads as chromatic aberration is a change in HUE. A metric that
+   * agrees with the code and disagrees with the eye is worse than no metric.
+   */
+  const desvioDeMatiz = (a, b) => {
+    const w = a.canvas.width, h = a.canvas.height;
+    const x0 = Math.round(w * .34), y0 = Math.round(h * .34);
+    const ww = Math.round(w * .32), hh = Math.round(h * .32);
+    const A = a.getImageData(x0, y0, ww, hh).data;
+    const B = b.getImageData(x0, y0, ww, hh).data;
+    const matiz = (r, g, bl) => {
+      const mx = Math.max(r, g, bl), mn = Math.min(r, g, bl), d = mx - mn;
+      if (!d) return -1;
+      let k;
+      if (mx === r) k = ((g - bl) / d + 6) % 6;
+      else if (mx === g) k = (bl - r) / d + 2;
+      else k = (r - g) / d + 4;
+      return k * 60;
+    };
+    let soma = 0, n = 0;
+    for (let i = 0; i < A.length; i += 8) {
+      if (Math.max(A[i], A[i + 1], A[i + 2]) < 40) continue;
+      const h1 = matiz(A[i], A[i + 1], A[i + 2]);
+      const h2 = matiz(B[i], B[i + 1], B[i + 2]);
+      if (h1 < 0 || h2 < 0) continue;
+      let d = Math.abs(h1 - h2);
+      if (d > 180) d = 360 - d;
+      soma += d; n++;
+    }
+    return +(soma / Math.max(n, 1)).toFixed(1);
+  };
+
   const difere = (a, b) => {
     const A = a.getImageData(0, 0, a.canvas.width, a.canvas.height).data;
     const B = b.getImageData(0, 0, b.canvas.width, b.canvas.height).data;
@@ -155,6 +204,7 @@ if (!arrancou) {
    * was reported as completely broken, three separate times.
    */
   const PISO = 25;
+  /** And for `rgb`, at least 30 degrees of hue shift on top of that. */
   const casos = [
     ['displace', 'still — must be identical',        0,        .5,  .7,   0, 'exact'],
     ['displace', 'smooth scroll (Lenis, CSS)',       V_SUAVE,  .5,  .7,   PISO, 'min'],
@@ -173,8 +223,15 @@ if (!arrancou) {
 
   let falhas = 0;
   for (const [efeito, rotulo, vel, prog, str, piso, modo] of casos) {
-    const d = difere(base[efeito], await desenha(efeito, vel, prog, str));
-    const ok = modo === 'exact' ? d === 0 : d >= piso;
+    const feito = await desenha(efeito, vel, prog, str);
+    const d = difere(base[efeito], feito);
+    let ok = modo === 'exact' ? d === 0 : d >= piso;
+    // `rgb` gets judged on hue as well, because pixel difference lied about it.
+    if (ok && modo === 'min' && efeito === 'rgb') {
+      const graus = desvioDeMatiz(base[efeito], feito);
+      ok = graus >= 30;
+      if (!ok) rotulo += ` — only ${graus}° of hue shift`;
+    }
     if (!ok) falhas++;
     tbody.insertAdjacentHTML('beforeend',
       `<tr><td>${efeito}</td><td>${rotulo}</td><td class="n">${d}</td>` +
@@ -185,8 +242,8 @@ if (!arrancou) {
   veredicto.className = falhas ? 'fail' : 'pass';
   veredicto.textContent = falhas
     ? `${falhas} of ${casos.length} failed — at least one effect is running and invisible.`
-    : `all ${casos.length} pass. Every effect visibly changes the image when it should, `
-      + `and leaves it untouched when it should not.`;
+    : `all ${casos.length} pass at ${HZ}Hz. Every effect visibly changes the image when `
+      + `it should, and leaves it untouched when it should not.`;
 
   // Side by side, because a number is not a look.
   const shots = document.getElementById('shots');

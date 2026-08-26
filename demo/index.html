@@ -155,7 +155,7 @@
       reading as a broken screen, so the default is well under that.
     </p>
     <figure>
-      <img id="c" alt="Generated engraved line field with its colours split apart on scroll">
+      <img id="c" alt="Generated teal and violet line field, its colours splitting apart on scroll">
       <figcaption>scroll · velocity-driven chromatic split</figcaption>
     </figure>
   </section>
@@ -255,10 +255,28 @@ function field(seed, hueA, hueB, lines = 150) {
   return c.toDataURL('image/jpeg', 0.92);
 }
 
+/**
+ * The third palette is not a style choice.
+ *
+ * It was `field(91, 28, 8)` — two neighbouring reds — and on it the `rgb`
+ * effect was invisible. Chromatic aberration separates the red and blue
+ * channels, so it needs both to be there. Those lines were R=248 G=106 B=84:
+ * shifting red gave a strong ghost, shifting blue gave a dark one the
+ * surrounding red swallowed, and the net result read as a slightly blurred
+ * red line rather than as a colour fringe.
+ *
+ * Measured as average hue shift in the central third — the thing the eye
+ * actually reads as "aberration", where a raw pixel difference is not:
+ *
+ *     28 → 8    (two reds)          21.7°   invisible
+ *     20 → 250  (red / blue)        43.4°
+ *     12 → 340  (like image 1)      59.5°
+ *     30 → 300  (this one)          61.1°   unmistakable
+ */
 const imgs = [
   ['a', field(7, 12, 340)],
   ['b', field(23, 200, 260)],
-  ['c', field(91, 28, 8)],
+  ['c', field(91, 30, 300)],
 ];
 await Promise.all(imgs.map(([id, src]) => new Promise((res) => {
   const el = document.getElementById(id);
@@ -318,7 +336,7 @@ let frames = 0, ultimo = performance.now(), fps = 0;
 /* A build stamp, because two hours went into debugging a fix that was already
    published and that the browser refused to fetch. If this line and the file
    on disk disagree, you are looking at a cached page — hard reload. */
-const BUILD = '2026-08-26e · centre floor — displace 62, rgb 54';
+const BUILD = '2026-08-26f · palette the rgb split can be seen on';
 
 setInterval(() => {
   const todas = [...a.elements, ...b.elements, ...c.elements];

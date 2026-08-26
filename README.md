@@ -3,6 +3,11 @@
 **GPU effects over the DOM you already have.** Point it at an image, get a
 WebGPU shader driven by scroll. If anything fails, the page keeps its images.
 
+[![CI](https://github.com/eimaieros/glaze/actions/workflows/ci.yml/badge.svg)](https://github.com/eimaieros/glaze/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![No dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
+![16.1 KB minified](https://img.shields.io/badge/minified-16.1%20KB-informational)
+
 No dependencies. 16.1 KB minified, 6.6 KB gzipped. Ships TypeScript types.
 
 ```js
@@ -42,11 +47,14 @@ untouched and visible.
 
 ## Install
 
-Straight from the repository — no npm release yet:
-
 ```bash
 npm install github:eimaieros/glaze
 ```
+
+From the repository rather than from npm, and that is on purpose: `glaze` on
+npm is an abandoned CSS-in-JS package last published in 2020. Taking a
+scoped name would work, but publishing a package makes a promise about
+maintenance that a portfolio project should not make yet.
 
 Or copy `src/` into your project. It's ES modules with no dependencies, so
 there is nothing to build.
@@ -566,6 +574,15 @@ WebGPU: Chrome/Edge 113+ (121+ on Android), Safari 26.0+ on macOS Tahoe 26 /
 iOS 26 / iPadOS 26, Firefox 141+ on Windows and 145+ on Apple Silicon.
 Everywhere else the page renders as an ordinary page, which is the point.
 
+---
+
+## Contributing
+
+[CONTRIBUTING.md](CONTRIBUTING.md) covers how to run it and what a good pull
+request looks like. [CHANGELOG.md](CHANGELOG.md) records what changed and, more
+usefully, what was wrong before. Security reports go to
+[SECURITY.md](SECURITY.md).
+
 ## Licence
 
-MIT © Rodrigo Figueiredo
+MIT © [Rodrigo Figueiredo](https://rodrigofigueiredo.dev)

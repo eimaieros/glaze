@@ -72,6 +72,17 @@
     font-size:.6rem;letter-spacing:.04em;color:#5f5f6b;clear:both;
   }
 
+  .segurar{
+    display:inline-flex;align-items:center;gap:.7em;margin-top:22px;cursor:pointer;
+    font-family:var(--mono);font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--fg);background:none;border:1px solid var(--line);border-radius:999px;
+    padding:.72em 1.3em;transition:background .3s,border-color .3s,color .3s;
+  }
+  .segurar:hover{border-color:var(--acc)}
+  .segurar[aria-pressed="true"]{background:var(--acc);border-color:var(--acc);color:#0b0b0e}
+  .segurar .dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.5}
+  .segurar[aria-pressed="true"] .dot{opacity:1}
+
   footer{padding:14vh 0 20vh;border-top:1px solid var(--line);color:var(--dim)}
   a{color:var(--acc)}
 </style>
@@ -105,6 +116,15 @@
       warp is weighted towards the edges, so the subject stays legible while
       the frame moves.
     </p>
+    <p>
+      Which makes it hard to <em>look</em> at: by the time you have focused on
+      the image you have stopped scrolling, and the effect is gone. Hold it
+      open instead — this is the <code>velocity</code> option, the same one you
+      need if you drive the page with Lenis or ScrollSmoother.
+    </p>
+    <button class="segurar" id="hold" type="button" aria-pressed="false">
+      <span class="dot"></span><span id="holdLabel">Hold the effect open</span>
+    </button>
     <figure>
       <img id="a" alt="Generated engraved line field, warping as the page scrolls">
       <figcaption>scroll · velocity-driven displacement</figcaption>
@@ -245,7 +265,22 @@ await Promise.all(imgs.map(([id, src]) => new Promise((res) => {
   el.onload = res; el.onerror = res; el.src = src;
 })));
 
-const a = glaze('#a', { effect: 'displace', strength: 0.7 });
+/**
+ * A velocity-driven effect only exists while the page is moving, which makes it
+ * genuinely hard to look at: by the time you have focused on the image, you
+ * have stopped scrolling and the effect is gone. `reveal` holds its state
+ * because it is driven by position, so it reads instantly — and that asymmetry
+ * had people reporting the other two as broken when they were working.
+ *
+ * So the demo can hold the velocity open. `velocity` is a real option, not a
+ * demo hack: anyone using Lenis or ScrollSmoother needs it, because those
+ * libraries transform the page instead of scrolling it and `window.scrollY`
+ * barely moves.
+ */
+let segurar = false;
+const fonteVelocidade = () => (segurar ? 1 : null);
+
+const a = glaze('#a', { effect: 'displace', strength: 0.7, velocity: fonteVelocidade });
 const b = glaze('#b', { effect: 'reveal' });
 const c = glaze('#c', { effect: 'rgb', strength: 0.35 });
 
@@ -258,6 +293,14 @@ const c = glaze('#c', { effect: 'rgb', strength: 0.35 });
    worse than no status light. `fps` is measured, for the same reason: Chrome
    suspends requestAnimationFrame entirely in a hidden tab, and without this
    you cannot tell that apart from a bug. */
+const botao = document.getElementById('hold');
+const rotulo = document.getElementById('holdLabel');
+botao.addEventListener('click', () => {
+  segurar = !segurar;
+  botao.setAttribute('aria-pressed', String(segurar));
+  rotulo.textContent = segurar ? 'Release — scroll to drive it' : 'Hold the effect open';
+});
+
 const hud = document.getElementById('hud');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -275,7 +318,7 @@ let frames = 0, ultimo = performance.now(), fps = 0;
 /* A build stamp, because two hours went into debugging a fix that was already
    published and that the browser refused to fetch. If this line and the file
    on disk disagree, you are looking at a cached page — hard reload. */
-const BUILD = '2026-08-26c · dense imagery + native scroll + velocity/30';
+const BUILD = '2026-08-26d · velocity per second + hold control';
 
 setInterval(() => {
   const todas = [...a.elements, ...b.elements, ...c.elements];
@@ -288,6 +331,7 @@ setInterval(() => {
     `reduced motion <b>${reduced ? 'yes' : 'no'}</b><br>` +
     `drawing <b>${aDesenhar} / ${todas.length}</b><br>` +
     `fps <b>${document.hidden ? 'tab hidden' : fps}</b><br>` +
+    `velocity <b>${segurar ? '1.00 held' : Math.abs(todas[0]?.uniforms[7] ?? 0).toFixed(2)}</b><br>` +
     (aDesenhar ? '' : '<span class="warn">images shown as-is</span>') +
     `<div class="build">${BUILD}</div>`;
 }, 400);

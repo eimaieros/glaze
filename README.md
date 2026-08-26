@@ -72,6 +72,36 @@ g.destroy();  // puts every element back exactly as it was found
 Call it as many times as you like with different effects. There is still one
 canvas, one device and one animation loop underneath.
 
+### With a smooth-scroll library
+
+Lenis, GSAP ScrollSmoother and friends do not scroll the page — they hold it at
+`scrollY = 0` and translate it. `window.scrollY` therefore barely moves, and a
+velocity-driven effect sees almost nothing. Feed glaze your scroller's own
+velocity instead:
+
+```js
+const lenis = new Lenis();
+
+glaze('figure img', {
+  effect: 'displace',
+  velocity: () => lenis.velocity / 30,   // normalise so ~1.0 is a brisk scroll
+});
+```
+
+Return `null` on any frame to hand the reading back to glaze.
+
+The same hook is what lets the demo hold an effect open so you can look at it.
+That is worth knowing about, because a velocity-driven effect only exists while
+the page is moving: by the time you have focused on the image you have stopped
+scrolling, and it is gone. `reveal` holds its state because it is driven by
+position, which is why it reads instantly and the other two were repeatedly
+reported as broken when they were working.
+
+```js
+let held = false;
+glaze('#hero img', { effect: 'displace', velocity: () => (held ? 1 : null) });
+```
+
 ### With framebudget
 
 Pass a [framebudget](https://github.com/eimaieros/framebudget) instance and
@@ -320,14 +350,32 @@ Divide by the element height alone and a tall image appears to lag a small one
 through the same scroll — they animate over different spans. Dividing by
 viewport-plus-element makes every element travel 0→1 over the same gesture.
 
-### 4. Velocity attacks fast and releases slow
+### 4. Velocity attacks fast, releases slow, and is measured in seconds
 
 ```js
-const alvo = clamp(delta, -1, 1);
+const dt   = clamp(now - last, 1, 100);              // ms
+const alvo = clamp(scrolled / (dt / 1000) / 1800, -1, 1);
+const decay = Math.pow(0.90, dt / 16.667);
 s.velocity = Math.abs(alvo) > Math.abs(s.velocity)
-  ? alvo                                 // attack: this frame's motion, now
-  : s.velocity * 0.90 + alvo * 0.10;     // release: ~370ms back to rest
+  ? alvo                                             // attack: now
+  : s.velocity * decay + alvo * (1 - decay);         // release: ~370ms
 ```
+
+**Per second, not per frame.** The obvious version asks how far the page moved
+since the previous frame and calls 60px a full-strength scroll. That silently
+ties the effect to the monitor — the same physical flick, measured:
+
+| refresh rate | busiest frame | velocity |
+|---|---|---|
+| 60 Hz | 33px | 1.00 |
+| 71 Hz | 27px | 0.90 |
+| 102 Hz | 20px | 0.66 |
+| 144 Hz | 14px | **0.48** |
+
+Half the effect on a better screen, for an identical gesture. Dividing by
+elapsed time gives 1.00 on all four, and the decay is corrected the same way so
+the settle feels identical at any rate. The `dt` is clamped at 100ms so a
+stalled frame is not read as a violent flick on the frame after it.
 
 This was symmetric at first — `v = v*0.86 + delta*0.14` — and that one line made
 the whole library look broken on a mouse.
@@ -426,7 +474,7 @@ Also exported: `EFFECTS`, `Stage`, `Layer`, `destroyAll()`.
 ## Tests
 
 ```bash
-npm test          # 81 tests, no browser, no GPU
+npm test          # 82 tests, no browser, no GPU
 open test/visual.html   # the part Node cannot check: is anything visible?
 npm run check     # types + tests
 ```

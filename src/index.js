@@ -33,6 +33,8 @@ export { Layer } from './layer.js';
  *   pointer: { x: number, y: number, near: number },
  *   budget: { tier?: string }|null,
  *   suspenso: boolean,
+ *   lastNow: number,
+ *   velocitySource: (() => number|null)|null,
  *   onPointer?: (e: PointerEvent) => void,
  *   onResize?: () => void,
  *   onVisibilidade?: () => void,
@@ -58,6 +60,8 @@ function getShared() {
     pointer: { x: 0.5, y: 0.5, near: 0 },
     budget: null,
     suspenso: false,
+    lastNow: 0,
+    velocitySource: null,
   };
   return shared;
 }
@@ -71,6 +75,12 @@ const prefersReducedMotion = () =>
  * @param {keyof typeof EFFECTS} [options.effect='displace']
  * @param {number} [options.strength] 0..1
  * @param {{tier?: string}} [options.budget] a framebudget FrameBudget instance, optional
+ * @param {() => number|null} [options.velocity]
+ *   Supply your own scroll velocity, normalised to -1..1, instead of letting
+ *   glaze read `window.scrollY`. Required if you use a smooth-scroll library
+ *   that transforms the page rather than scrolling it — Lenis, GSAP
+ *   ScrollSmoother — because `window.scrollY` barely moves on those.
+ *   Return `null` on any frame to hand the reading back to glaze.
  * @param {boolean} [options.respectReducedMotion=true]
  * @returns {{ destroy(): void, elements: Layer[], active: boolean }}
  */
@@ -79,6 +89,7 @@ export function glaze(target, options = {}) {
     effect: effectName = 'displace',
     respectReducedMotion = true,
     budget = null,
+    velocity = null,
     ...rest
   } = options;
 
@@ -94,6 +105,7 @@ export function glaze(target, options = {}) {
 
   const s = getShared();
   if (budget) s.budget = budget;
+  if (velocity) s.velocitySource = velocity;
 
   /** @type {Layer[]} */
   const created = [];
@@ -147,6 +159,7 @@ function start(s) {
   if (s.running) return;
   s.running = true;
   s.t0 = performance.now();
+  s.lastNow = s.t0;
   s.lastScrollY = window.scrollY;
 
   s.onPointer = (e) => {
@@ -179,25 +192,26 @@ function start(s) {
     s.raf = requestAnimationFrame(frame);
 
     /**
-     * Scroll velocity, normalised so ~30px in one frame — about 1800px/s —
-     * reads as 1.0.
+     * Scroll velocity in pixels per second, normalised so 1800px/s reads as
+     * 1.0. A caller with its own scroller (Lenis, GSAP ScrollSmoother, a
+     * virtualised list) can supply `velocity` instead and bypass all of this.
      *
-     * THIRTY, NOT SIXTY, BECAUSE OF SMOOTH SCROLLING. The first version
-     * assumed a wheel notch arrives as one 100px jump, which is true only of
-     * native scrolling. `scroll-behavior: smooth`, Lenis, GSAP ScrollSmoother
-     * and every other smooth-scroll library animate that same notch over
-     * ~300ms instead, so the page moves about 16px in the busiest frame
-     * rather than 100. Normalised by 60 that is v=0.26 — a quarter of the
-     * effect, for input the user cannot tell apart.
+     * PER SECOND, NOT PER FRAME — and that took three rewrites to get right.
      *
-     * The demo had `scroll-behavior: smooth` in its own stylesheet, which is
-     * how this hid: the two velocity-driven effects looked broken while the
-     * progress-driven one looked fine, because progress does not care how
-     * fast you got there.
+     * The first version was `delta = (y - last) / 60`, which asks "how far did
+     * the page move since the last frame" and calls 60px a full-strength
+     * scroll. That silently ties the effect to the monitor. The same physical
+     * flick measured on real hardware:
      *
-     * At 30 a smooth-scrolled notch reaches 0.53 and anything faster
-     * saturates, which is the right trade: expressive enough to feel like
-     * speed, low enough that the common case is visible at all.
+     *     60 Hz   33px in the busiest frame   v = 1.00
+     *     71 Hz   27px                        v = 0.90
+     *    102 Hz   20px                        v = 0.66
+     *    144 Hz   14px                        v = 0.48
+     *
+     * Half the effect on a good monitor, for the identical gesture. Dividing
+     * by elapsed time instead gives 1.00 on all four, which is the only
+     * defensible answer — the user moved the page at a speed, and speed is
+     * distance over time.
      *
      * FAST ATTACK, SLOW RELEASE — and the asymmetry is the whole point.
      *
@@ -211,19 +225,30 @@ function start(s) {
      * It measured fine on a trackpad, where scrolling is continuous, which is
      * how it survived: the case it was tuned for was the case that hid it.
      *
-     * Rising instantly to the peak and decaying from there gives the same
-     * trackpad response (0.49 -> 0.50) and four times the response to a wheel
-     * (0.23 -> 1.00). The decay is still what gives it weight; zeroing on stop
-     * makes the effect snap off.
+     * The decay is what gives it weight; zeroing on stop makes the effect snap
+     * off. It is also frame-rate corrected, for the same reason as above.
      */
     const y = window.scrollY;
-    const delta = (y - s.lastScrollY) / 30;
+    const dtMs = Math.min(Math.max(now - s.lastNow, 1), 100);
+    s.lastNow = now;
+
+    // A source may return null or undefined to mean "you take it from here",
+    // so a caller can override velocity only some of the time without having
+    // to reimplement the scroll reading themselves.
+    let alvo = s.velocitySource ? s.velocitySource() : null;
+    if (typeof alvo !== 'number' || Number.isNaN(alvo)) {
+      alvo = (y - s.lastScrollY) / (dtMs / 1000) / 1800;
+    }
     s.lastScrollY = y;
-    const alvo = delta > 1 ? 1 : delta < -1 ? -1 : delta;
+    alvo = alvo > 1 ? 1 : alvo < -1 ? -1 : alvo;
+
+    // 0.90 per frame at 60fps, held constant in real time so the settle feels
+    // the same on a 144Hz screen as on a 60Hz one.
+    const decay = Math.pow(0.90, dtMs / 16.667);
     s.velocity = Math.abs(alvo) > Math.abs(s.velocity)
-      ? alvo                                  // attack: this frame's motion, now
-      : s.velocity * 0.90 + alvo * 0.10;      // release: ~370ms back to rest
-    s.pointer.near *= 0.97;
+      ? alvo                                          // attack: now
+      : s.velocity * decay + alvo * (1 - decay);      // release: ~370ms
+    s.pointer.near *= Math.pow(0.97, dtMs / 16.667);
 
     /**
      * The tier from framebudget, if the caller gave us one. `minimal` means

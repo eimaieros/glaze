@@ -74,13 +74,26 @@ const prefersReducedMotion = () =>
  * @param {object} [options]
  * @param {keyof typeof EFFECTS} [options.effect='displace']
  * @param {number} [options.strength] 0..1
- * @param {{tier?: string}} [options.budget] a framebudget FrameBudget instance, optional
+ * @param {{tier?: string}} [options.budget]
+ *   A framebudget instance. Like `velocity`, this is a property of the shared
+ *   loop rather than of these elements: there is one loop for the whole page,
+ *   so the last call that passes one wins. Pass it once.
  * @param {() => number|null} [options.velocity]
  *   Supply your own scroll velocity, normalised to -1..1, instead of letting
  *   glaze read `window.scrollY`. Required if you use a smooth-scroll library
  *   that transforms the page rather than scrolling it — Lenis, GSAP
  *   ScrollSmoother — because `window.scrollY` barely moves on those.
  *   Return `null` on any frame to hand the reading back to glaze.
+ *
+ *   Also a property of the shared loop, not of these elements — the last call
+ *   that passes one wins. That is a consequence of there being a single
+ *   animation loop for the page, which is the point of the architecture.
+ * @param {number} [options.scale]
+ *   `displace` only: the spatial frequency of the warp. Effect-specific
+ *   parameters have to be listed here to reach TypeScript callers — this one
+ *   was in the README and in the effect's defaults while `tsc` rejected it,
+ *   which is the same lie as an option the shader never reads, one layer up.
+ *   A custom effect with its own `extras` needs a cast at the call site.
  * @param {boolean} [options.respectReducedMotion=true]
  * @returns {{ destroy(): void, elements: Layer[], active: boolean }}
  */

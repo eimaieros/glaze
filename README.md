@@ -3,7 +3,7 @@
 **GPU effects over the DOM you already have.** Point it at an image, get a
 WebGPU shader driven by scroll. If anything fails, the page keeps its images.
 
-No dependencies. 13.6 KB minified, 5.6 KB gzipped. Ships TypeScript types.
+No dependencies. 16.1 KB minified, 6.6 KB gzipped. Ships TypeScript types.
 
 ```js
 glaze('#hero img', { effect: 'displace' });
@@ -90,6 +90,10 @@ glaze('figure img', {
 
 Return `null` on any frame to hand the reading back to glaze.
 
+`velocity` and `budget` both belong to the **shared loop**, not to the elements
+in that particular call — there is one loop for the whole page, so the last
+call that passes one wins. Pass them once.
+
 The same hook is what lets the demo hold an effect open so you can look at it.
 That is worth knowing about, because a velocity-driven effect only exists while
 the page is moving: by the time you have focused on the image you have stopped
@@ -122,7 +126,7 @@ glaze('figure img', { effect: 'displace', budget: fb });
 
 | name | driven by | options | what it does |
 |---|---|---|---|
-| `displace` | scroll velocity | `strength`, `scale` | liquid warp along the direction of travel, weighted to the edges so the subject stays legible |
+| `displace` | scroll velocity | `strength`, `scale` | liquid warp along the direction of travel, weighted towards the edges so the middle of the frame moves least |
 | `reveal` | scroll progress | `strength` | directional mask with a torn, noisy leading edge — an alternative to the opacity fade |
 | `rgb` | scroll velocity | `strength` | vertical chromatic split |
 

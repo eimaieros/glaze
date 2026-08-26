@@ -113,8 +113,8 @@
     <p>
       A still page is an untouched image. The displacement is driven by scroll
       velocity, so the effect costs nothing when nothing is happening — and the
-      warp is weighted towards the edges, so the subject stays legible while
-      the frame moves.
+      warp is weighted towards the edges, so the middle of the frame moves
+      least and the subject of a photograph stays readable.
     </p>
     <p>
       Which makes it hard to <em>look</em> at: by the time you have focused on
@@ -339,7 +339,7 @@ let frames = 0, ultimo = performance.now(), fps = 0;
 /* A build stamp, because two hours went into debugging a fix that was already
    published and that the browser refused to fetch. If this line and the file
    on disk disagree, you are looking at a cached page — hard reload. */
-const BUILD = '2026-08-26g · chromatic split at 0.11';
+const BUILD = '2026-08-26h · final sweep';
 
 setInterval(() => {
   const todas = [...a.elements, ...b.elements, ...c.elements];

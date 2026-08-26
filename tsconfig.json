@@ -9,6 +9,10 @@
     "declaration": true,
     "emitDeclarationOnly": true,
     "outDir": "types",
+    // Explicit because TypeScript 7 requires it: without it, tsc stops with
+    // TS5011 rather than inferring "src" as it used to. One line, and it
+    // means the same thing under 5 and 7.
+    "rootDir": "src",
     "skipLibCheck": true,
     "types": [
       "@webgpu/types"

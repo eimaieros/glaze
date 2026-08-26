@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- TypeScript 5 → 7 for the declaration build, with `rootDir` now explicit in
+  `tsconfig.json`. TypeScript 7 stops with `TS5011` rather than inferring the
+  common source directory the way 5 did, so the bump alone would have turned CI
+  red. One line, and it means the same thing under both majors.
+
+  Worth knowing if you generate types the same way: 7 emits
+  `export declare class` where 5 emitted `export class`, and orders the
+  re-exports differently. Both are valid `.d.ts`; the diff is noise, not a
+  behaviour change.
+
 ## [0.1.0] — 2026-08-26
 
 First public version.

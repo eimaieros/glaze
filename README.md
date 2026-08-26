@@ -76,7 +76,8 @@ canvas, one device and one animation loop underneath.
 
 Pass a [framebudget](https://github.com/eimaieros/framebudget) instance and
 glaze turns itself down when the device is struggling — `reduced` scales the
-effect back to 45%, `minimal` stops drawing entirely.
+effect back to 45%, `minimal` gives the page its plain `<img>` elements back and
+stops drawing. It keeps watching, and takes over again when there is headroom.
 
 ```js
 import { FrameBudget } from 'framebudget';
@@ -151,6 +152,46 @@ Anything in `defaults` other than `strength` **must** appear in `extras`.
 `displace` shipped advertising a `scale` default that the shader hard-coded and
 never read, so `{ scale: 8 }` did nothing at all, silently — there is now a test
 that fails on any option that isn't wired to something.
+
+---
+
+## A canvas only holds its content for one frame
+
+This is the thing that took longest to see, and it is the reason the middle
+three rows of that table exist.
+
+A WebGPU canvas is not a picture you paint once. The swap-chain texture is
+presented and released at the end of the frame, so a canvas nobody redraws goes
+blank. Measured on the live demo: 5899 painted samples immediately after
+`render()`, and **zero** fifty milliseconds later.
+
+While the loop is running that is invisible — every frame repaints. The moment
+it stops, the canvas empties, and if the elements are still hidden the page is
+left with holes where its images were. And the loop stops for entirely ordinary
+reasons:
+
+- framebudget reports `minimal`, and glaze deliberately draws nothing
+- the tab goes to the background, and Chrome suspends `requestAnimationFrame`
+- the GPU device is lost
+
+The first of those was the worst. The code read
+`if (tier === 'minimal') { render([]); return; }` — so on a device already
+struggling, at the exact moment you least want to break someone's page, glaze
+deleted every image it had taken over. The library's one promise, inverted by
+the branch that existed to keep it.
+
+So every path that stops producing frames now hands the DOM back first:
+
+```js
+function suspender(s) {
+  s.suspenso = true;
+  for (const item of s.items) item.mostrarDom();  // real images, on screen
+  s.stage.render([]);                            // only then, clear
+}
+```
+
+The order is asserted by a test. Clearing first would leave one frame with
+neither the canvas content nor the images.
 
 ---
 
@@ -287,9 +328,12 @@ the test suite, where the message can say why.
 | no WebGPU | `init()` resolves `false`, nothing is created, images stay |
 | no adapter | same, `stage.failed === 'no-adapter'` |
 | no canvas context | canvas is removed again, images stay |
-| device lost mid-session | canvas removed, `ready` flips false, images come back |
+| device lost mid-session | elements restored, canvas removed, `ready` flips false |
 | image fails to decode | that element is skipped, the others still run |
 | `prefers-reduced-motion` | returns an inert handle, nothing is touched |
+| framebudget says `minimal` | elements restored, canvas cleared, loop keeps watching |
+| tab goes to the background | elements restored — Chrome suspends rAF entirely |
+| tab comes back | elements hidden again, drawing resumes |
 | unknown effect name | throws `RangeError` — a typo is a bug, not a degradation |
 
 The last row is the one asymmetry, and it's on purpose. Missing hardware is a
@@ -325,7 +369,7 @@ Also exported: `EFFECTS`, `Stage`, `Layer`, `destroyAll()`.
 ## Tests
 
 ```bash
-npm test          # 59 tests, no browser, no GPU
+npm test          # 76 tests, no browser, no GPU
 npm run check     # types + tests
 ```
 
@@ -336,6 +380,8 @@ will ever meet — so the tests run there deliberately.
 |---|---|
 | `layer.test.js` | the ordering guarantee: a recording fake device asserts `upload` happens before `hide` |
 | `velocity.test.js` | a wheel notch must produce visible displacement, in pixels |
+| `arranque.test.js` | concurrent `init()` calls share one device and one canvas |
+| `suspender.test.js` | every path that stops drawing restores the elements first |
 | `dom.test.js` | the same promise in real jsdom, which also has no `matchMedia` and no `IntersectionObserver` |
 | `registry.test.js` | clip-space arithmetic, height-independent progress, zero layout reads on a still page |
 | `effects.test.js` | the structural rules the shared pipeline layout depends on |
@@ -345,8 +391,9 @@ Each guard was checked by breaking it on purpose: hiding the element before the
 upload, swapping `visibility` for `display`, giving an effect its own
 `@group(0)`, deleting the dirty-flag early return, making `init()` throw instead
 of returning `false`, restoring the low-pass velocity filter, and putting
-`scale` back in `defaults` without wiring it. All seven were caught, by the test
-that names the problem.
+`scale` back in `defaults` without wiring it, removing the re-entrancy guard
+from `init()`, and putting the render-nothing branch back in the `minimal` tier.
+All nine were caught, by the test that names the problem.
 
 What none of them can cover is whether the shaders look right. That is what
 `demo/` is for, and there is no substitute for opening it.

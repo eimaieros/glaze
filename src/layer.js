@@ -63,6 +63,35 @@ export class Layer {
     this.pipeline = null;
     this.uniforms = new Float32Array(16);
     this._previousVisibility = '';
+    /** Is the real element currently the thing on screen? */
+    this.domVisivel = true;
+  }
+
+  /**
+   * Give the page its element back, without giving up the GPU resources.
+   *
+   * A WebGPU canvas only holds its content for the frame it was drawn in: the
+   * swap-chain texture is presented and released, so a canvas that is not
+   * redrawn next frame goes blank. That is fine while the loop is running and
+   * catastrophic the moment it stops — and it stops for entirely ordinary
+   * reasons. framebudget reporting `minimal`, the tab going to the background
+   * (Chrome suspends rAF outright), the GPU device being lost. In every one of
+   * those the canvas empties while the element is still hidden, and the page is
+   * left with holes where its images were.
+   *
+   * So whenever glaze stops drawing, it hands the DOM back first.
+   */
+  mostrarDom() {
+    if (!this.ready || this.domVisivel) return;
+    this.el.style.visibility = this._previousVisibility;
+    this.domVisivel = true;
+  }
+
+  /** Take it back over, once frames are being produced again. */
+  esconderDom() {
+    if (!this.ready || !this.domVisivel) return;
+    this.el.style.visibility = 'hidden';
+    this.domVisivel = false;
   }
 
   /**
@@ -125,6 +154,7 @@ export class Layer {
     // Only now. See the note at the top of this file.
     this._previousVisibility = this.el.style.visibility;
     this.el.style.visibility = 'hidden';
+    this.domVisivel = false;
     this.ready = true;
     return true;
   }
@@ -164,7 +194,7 @@ export class Layer {
 
   /** Puts the DOM element back exactly as it was found. */
   destroy() {
-    if (this.ready) this.el.style.visibility = this._previousVisibility;
+    if (this.ready && !this.domVisivel) this.el.style.visibility = this._previousVisibility;
     this.texture?.destroy?.();
     this.uniformBuffer?.destroy?.();
     this.ready = false;

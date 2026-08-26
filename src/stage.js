@@ -87,10 +87,12 @@ export class Stage {
   /**
    * @param {object} [opts]
    * @param {Document} [opts.document]
+   * @param {any}      [opts.navigator] Injectable so the init race is testable.
    * @param {number}   [opts.maxPixelRatio] Hard cap on devicePixelRatio.
    */
   constructor(opts = {}) {
     this.doc = opts.document ?? (typeof document !== 'undefined' ? document : null);
+    this.nav = opts.navigator ?? (typeof navigator !== 'undefined' ? navigator : null);
     /**
      * Capped at 2 deliberately. A 3x phone screen means 9x the fragments for a
      * difference almost nobody can see, and these shaders are fragment-bound.
@@ -112,6 +114,8 @@ export class Stage {
     this.failed = null;
     /** @type {((info: GPUDeviceLostInfo) => void)|null} */
     this.onLost = null;
+    /** @type {Promise<boolean>|null} the one in-flight initialisation */
+    this._aArrancar = null;
   }
 
   /**
@@ -128,7 +132,32 @@ export class Stage {
     if (this.ready) return true;
     if (this.failed) return false;
 
-    const nav = typeof navigator !== 'undefined' ? navigator : null;
+    /**
+     * CONCURRENT CALLERS MUST SHARE ONE INITIALISATION.
+     *
+     * `glaze()` is designed to be called several times on a page — that is the
+     * documented way to give different elements different effects — and each
+     * call awaits `init()`. Without this line all of them get past the `ready`
+     * check above, because `ready` is only set at the very end, after three
+     * awaits. Each then requests its own adapter and device and appends its own
+     * canvas.
+     *
+     * The failure that causes is invisible and total. The last device to
+     * finish wins `this.device`, but the Layers already built their textures
+     * and bind groups on an earlier one. Cross-device resources are a WebGPU
+     * validation error, and validation errors are delivered asynchronously —
+     * so `render()` returns normally, nothing is thrown, nothing reaches the
+     * console, and the page draws nothing at all. Three glaze() calls, three
+     * canvases, zero pixels.
+     */
+    if (this._aArrancar) return this._aArrancar;
+    this._aArrancar = this._arrancar();
+    return this._aArrancar;
+  }
+
+  /** @returns {Promise<boolean>} */
+  async _arrancar() {
+    const nav = this.nav;
     const doc = this.doc;
     if (!nav?.gpu || !doc) {
       this.failed = 'no-webgpu';
@@ -176,14 +205,12 @@ export class Stage {
       return false;
     }
 
+    /** @type {GPUTextureFormat} */
+    const format = nav.gpu.getPreferredCanvasFormat();
     this.canvas = c;
     this.context = ctx;
-    this.format = nav.gpu.getPreferredCanvasFormat();
-    ctx.configure({
-      device,
-      format: this.format,
-      alphaMode: 'premultiplied',
-    });
+    this.format = format;
+    ctx.configure({ device, format, alphaMode: 'premultiplied' });
 
     this.resize();
     this.ready = true;
@@ -271,5 +298,8 @@ export class Stage {
     this.pipelines.clear();
     this.device?.destroy?.();
     this.ready = false;
+    // Without this a destroyed stage would hand out the old resolved promise
+    // and report itself ready with a dead device.
+    this._aArrancar = null;
   }
 }

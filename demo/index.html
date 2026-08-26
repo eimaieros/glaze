@@ -229,13 +229,17 @@ let frames = 0, ultimo = performance.now(), fps = 0;
 })();
 
 setInterval(() => {
-  const camadas = a.elements.length + b.elements.length + c.elements.length;
+  const todas = [...a.elements, ...b.elements, ...c.elements];
+  // A layer that has handed its element back is not drawing. Say so, rather
+  // than counting it as running — that mistake is what made this HUD claim
+  // "3 running" over a completely empty canvas.
+  const aDesenhar = todas.filter((L) => !L.domVisivel).length;
   hud.innerHTML =
     `webgpu <b>${navigator.gpu ? 'yes' : 'no'}</b><br>` +
     `reduced motion <b>${reduced ? 'yes' : 'no'}</b><br>` +
-    `layers <b>${camadas}</b><br>` +
+    `drawing <b>${aDesenhar} / ${todas.length}</b><br>` +
     `fps <b>${document.hidden ? 'tab hidden' : fps}</b><br>` +
-    (camadas ? '' : '<span class="warn">images shown as-is</span>');
+    (aDesenhar ? '' : '<span class="warn">images shown as-is</span>');
 }, 400);
 </script>
 

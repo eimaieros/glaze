@@ -32,8 +32,10 @@ export { Layer } from './layer.js';
  *   lastScrollY: number, velocity: number,
  *   pointer: { x: number, y: number, near: number },
  *   budget: { tier?: string }|null,
+ *   suspenso: boolean,
  *   onPointer?: (e: PointerEvent) => void,
  *   onResize?: () => void,
+ *   onVisibilidade?: () => void,
  * }} Shared
  */
 
@@ -55,6 +57,7 @@ function getShared() {
     velocity: 0,
     pointer: { x: 0.5, y: 0.5, near: 0 },
     budget: null,
+    suspenso: false,
   };
   return shared;
 }
@@ -156,6 +159,21 @@ function start(s) {
   s.onResize = () => s.stage.resize();
   window.addEventListener('resize', s.onResize, { passive: true });
 
+  /**
+   * Chrome suspends requestAnimationFrame outright in a hidden tab, so the
+   * canvas is presented once and then goes blank while the elements are still
+   * hidden. Nobody is looking at a hidden tab, but something might be: an OS
+   * window thumbnail, a print, a screenshot, a link-preview crawler. Handing
+   * the DOM back costs one property write per element.
+   */
+  s.onVisibilidade = () => (document.hidden ? suspender(s) : retomar(s));
+  document.addEventListener('visibilitychange', s.onVisibilidade);
+
+  // A lost device means no more frames will ever be produced by this stage.
+  s.stage.onLost = () => suspender(s);
+
+  if (document.hidden) suspender(s);
+
   /** @param {number} now */
   const frame = (now) => {
     s.raf = requestAnimationFrame(frame);
@@ -189,10 +207,20 @@ function start(s) {
       : s.velocity * 0.90 + alvo * 0.10;      // release: ~370ms back to rest
     s.pointer.near *= 0.97;
 
-    // The tier from framebudget, if the caller gave us one. `minimal` means the
-    // device is already struggling: the correct amount of decoration is none.
+    /**
+     * The tier from framebudget, if the caller gave us one. `minimal` means
+     * the device is already struggling and the correct amount of decoration
+     * is none — but "none" has to mean the plain images, not empty boxes.
+     *
+     * This used to be `s.stage.render([]); return;`, which cleared the canvas
+     * and left every element hidden. On a struggling device, at the exact
+     * moment you least want to break someone's page, glaze deleted all the
+     * images. Rendering nothing is only a safe fallback if the DOM comes back
+     * first.
+     */
     const tier = s.budget?.tier;
-    if (tier === 'minimal') { s.stage.render([]); return; }
+    if (tier === 'minimal') { suspender(s); return; }
+    if (s.suspenso) retomar(s);
     const scale = tier === 'reduced' ? 0.45 : 1;
 
     s.registry.measure();
@@ -209,12 +237,36 @@ function start(s) {
   s.raf = requestAnimationFrame(frame);
 }
 
+/**
+ * Stop drawing and give the page its elements back.
+ *
+ * Always in that order. The canvas is cleared only after the real images are
+ * on screen again, so there is never a frame with neither.
+ * @param {Shared} s
+ */
+function suspender(s) {
+  if (s.suspenso) return;
+  s.suspenso = true;
+  for (const item of s.items) item.mostrarDom();
+  s.stage.render([]);
+}
+
+/** @param {Shared} s */
+function retomar(s) {
+  if (!s.suspenso) return;
+  s.suspenso = false;
+  for (const item of s.items) item.esconderDom();
+  // The page may have scrolled or resized while we were not looking.
+  s.registry.dirty = true;
+}
+
 /** @param {Shared} s */
 function stop(s) {
   if (!s.running) return;
   cancelAnimationFrame(s.raf);
   if (s.onPointer) window.removeEventListener('pointermove', s.onPointer);
   if (s.onResize) window.removeEventListener('resize', s.onResize);
+  if (s.onVisibilidade) document.removeEventListener('visibilitychange', s.onVisibilidade);
   s.running = false;
 }
 

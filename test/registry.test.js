@@ -98,3 +98,67 @@ test('remove() takes the element out of the set', () => {
   r.remove(i);
   assert.equal(r.items.size, 0);
 });
+
+// ── the element moves without the viewport moving ────────────────────────────
+
+test('a ResizeObserver is wired up when the browser has one', () => {
+  /**
+   * Scroll and window-resize are both about the viewport. An element's rect can
+   * change while the viewport sits perfectly still: a webfont lands and the
+   * paragraph above reflows, a <details> opens, a grid reflows because a sibling
+   * changed. Without this the quad stays where it last measured and the real
+   * element moves out from under it — no error, no warning, wrong pixels until
+   * the next scroll.
+   */
+  let observados = 0;
+  /** @type {Function|null} */
+  let disparar = null;
+  class FakeRO {
+    constructor(fn) { disparar = fn; }
+    observe() { observados++; }
+    unobserve() { observados--; }
+    disconnect() { observados = 0; }
+  }
+
+  const win = { ...fakeWindow(), ResizeObserver: FakeRO };
+  const r = new Registry({ window: win });
+  const i = r.add(item(R(0, 0, 100, 100)));
+  assert.equal(observados, 1, 'the element goes into the observer');
+
+  r.measure();
+  assert.equal(r.dirty, false, 'measured, so clean');
+
+  disparar([{ target: i.el }]);
+  assert.equal(r.dirty, true, 'a size change makes it dirty again');
+
+  r.remove(i);
+  assert.equal(observados, 0);
+});
+
+test('a browser without ResizeObserver still works', () => {
+  // Safari shipped it late enough that a fallback is not hypothetical.
+  const r = new Registry({ window: fakeWindow() });
+  const i = r.add(item(R(0, 0, 100, 100)));
+  r.measure();
+  assert.equal(i.visible, true);
+  r.destroy();
+});
+
+test('an element removed from the document is not drawn', () => {
+  /**
+   * A detached element still answers getBoundingClientRect() — with zeroes.
+   * Left alone that is a degenerate quad at the top-left corner, which looks
+   * like a rendering bug and is really a lifecycle one. Any framework that
+   * swaps DOM on navigation produces this.
+   */
+  const r = new Registry({ window: fakeWindow() });
+  const i = r.add(item(R(10, 10, 100, 100)));
+  i.el.isConnected = true;
+  r.measure();
+  assert.equal(i.visible, true);
+
+  i.el.isConnected = false;
+  r.dirty = true;
+  r.measure();
+  assert.equal(i.visible, false, 'out of the document, out of the frame');
+});

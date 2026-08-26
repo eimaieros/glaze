@@ -26,12 +26,31 @@ function filtro(deltasPx) {
   let v = 0;
   const picos = [];
   for (const px of deltasPx) {
-    const delta = px / 60;
+    const delta = px / 30;
     const alvo = delta > 1 ? 1 : delta < -1 ? -1 : delta;
     v = Math.abs(alvo) > Math.abs(v) ? alvo : v * 0.90 + alvo * 0.10;
     picos.push(v);
   }
   return picos;
+}
+
+/**
+ * One wheel notch as a smooth-scroll library delivers it: the same 100px, but
+ * animated over ~300ms with an ease instead of arriving in one frame.
+ * `scroll-behavior: smooth`, Lenis and GSAP ScrollSmoother all produce this
+ * shape, and between them they cover a large share of the sites anyone would
+ * put this library on.
+ */
+function suave(distancia = 100, ms = 300, fps = 60) {
+  const n = Math.round((ms / 1000) * fps);
+  const pos = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    pos.push(distancia * (1 - Math.pow(1 - t, 3)));   // ease-out cubic
+  }
+  const deltas = [];
+  for (let i = 0; i < n; i++) deltas.push(pos[i + 1] - pos[i]);
+  return [...deltas, ...Array(20).fill(0)];
 }
 
 const pico = (d) => Math.max(...filtro(d).map(Math.abs));
@@ -58,6 +77,35 @@ test('a light wheel notch is visible too, and smaller than a hard one', () => {
   const forte = pico([100, ...Array(20).fill(0)]);
   assert.ok(deslocamentoPx(leve) >= 12, `a light notch should still register`);
   assert.ok(leve < forte, 'and a light notch must not look the same as a hard one');
+});
+
+/**
+ * THE ONE THAT WOULD HAVE SAVED THREE ROUNDS OF DEBUGGING.
+ *
+ * Every earlier test in this file fed the filter a native scroll — one big
+ * jump. Under a smooth-scroll library the same gesture arrives spread over
+ * twenty frames, the busiest of which moves 16px rather than 100. Normalised
+ * by 60 that was v=0.26 against v=1.00: a quarter of the effect, for an input
+ * the user cannot tell apart from the other one.
+ *
+ * The demo had `scroll-behavior: smooth` in its own stylesheet. The two
+ * velocity-driven effects looked broken and the progress-driven one looked
+ * fine, which is exactly the symptom that got reported.
+ */
+test('a smooth-scrolled wheel notch is still clearly visible', () => {
+  const v = pico(suave());
+  const px = deslocamentoPx(v);
+  assert.ok(px >= 20,
+    `smooth scrolling must still move the image at least 20px, got ${px.toFixed(1)}px ` +
+    `(v=${v.toFixed(2)}). Normalising by 60px/frame gave 11px here and the effect ` +
+    `looked broken on every site using scroll-behavior:smooth or Lenis.`);
+});
+
+test('smooth scrolling reads as slower than native, but not as nothing', () => {
+  const s = pico(suave());
+  const n = pico(RODA);
+  assert.ok(s < n, 'a smooth scroll is genuinely slower and should read that way');
+  assert.ok(s > 0.45, `but not by four times over — got ${s.toFixed(2)}`);
 });
 
 test('trackpad response is preserved, not traded away', () => {
@@ -101,7 +149,7 @@ test('the constants here still match src/index.js', async () => {
   const { readFileSync } = await import('node:fs');
   const src = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
   // A copy nothing compares is a second version waiting to drift.
-  assert.match(src, /\(y - s\.lastScrollY\) \/ 60/, 'normalisation divisor changed');
+  assert.match(src, /\(y - s\.lastScrollY\) \/ 30/, "normalisation divisor changed — smooth scrolling will regress");
   assert.match(src, /s\.velocity \* 0\.90 \+ alvo \* 0\.10/, 'release coefficients changed');
   assert.match(src, /Math\.abs\(alvo\) > Math\.abs\(s\.velocity\)\s*\n?\s*\? alvo/,
     'the fast-attack branch is gone — the wheel case will regress');

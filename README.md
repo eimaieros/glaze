@@ -426,7 +426,8 @@ Also exported: `EFFECTS`, `Stage`, `Layer`, `destroyAll()`.
 ## Tests
 
 ```bash
-npm test          # 79 tests, no browser, no GPU
+npm test          # 81 tests, no browser, no GPU
+open test/visual.html   # the part Node cannot check: is anything visible?
 npm run check     # types + tests
 ```
 
@@ -436,7 +437,8 @@ will ever meet — so the tests run there deliberately.
 | file | what it holds down |
 |---|---|
 | `layer.test.js` | the ordering guarantee: a recording fake device asserts `upload` happens before `hide` |
-| `velocity.test.js` | a wheel notch must produce visible displacement, in pixels |
+| `velocity.test.js` | wheel and smooth-scrolled notches must both produce visible displacement |
+| `visual.html` | renders each effect in a real browser and measures how much it changed the pixels |
 | `arranque.test.js` | concurrent `init()` calls share one device and one canvas |
 | `suspender.test.js` | every path that stops drawing restores the elements first |
 | `dom.test.js` | the same promise in real jsdom, which also has no `matchMedia` and no `IntersectionObserver` |

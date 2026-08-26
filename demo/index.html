@@ -11,7 +11,12 @@
     --mono:ui-monospace,'JetBrains Mono',SFMono-Regular,Menlo,monospace;
   }
   *{margin:0;padding:0;box-sizing:border-box}
-  html{scroll-behavior:smooth}
+  /* No `scroll-behavior: smooth`. It was here, and it was quietly halving the
+     demo: a wheel notch animated over ~300ms moves ~16px in its busiest frame
+     instead of 100, so the two velocity-driven effects got a quarter of the
+     input while the progress-driven one was unaffected. The library now
+     normalises for that, but the demo should show native scrolling. */
+  html{scroll-behavior:auto}
   body{
     background:var(--bg);color:var(--fg);
     font:400 16px/1.65 ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
@@ -270,7 +275,7 @@ let frames = 0, ultimo = performance.now(), fps = 0;
 /* A build stamp, because two hours went into debugging a fix that was already
    published and that the browser refused to fetch. If this line and the file
    on disk disagree, you are looking at a cached page — hard reload. */
-const BUILD = '2026-08-26b · dense source imagery — all three effects visible';
+const BUILD = '2026-08-26c · dense imagery + native scroll + velocity/30';
 
 setInterval(() => {
   const todas = [...a.elements, ...b.elements, ...c.elements];

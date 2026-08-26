@@ -179,7 +179,25 @@ function start(s) {
     s.raf = requestAnimationFrame(frame);
 
     /**
-     * Scroll velocity, normalised so ~60px in one frame reads as 1.0.
+     * Scroll velocity, normalised so ~30px in one frame — about 1800px/s —
+     * reads as 1.0.
+     *
+     * THIRTY, NOT SIXTY, BECAUSE OF SMOOTH SCROLLING. The first version
+     * assumed a wheel notch arrives as one 100px jump, which is true only of
+     * native scrolling. `scroll-behavior: smooth`, Lenis, GSAP ScrollSmoother
+     * and every other smooth-scroll library animate that same notch over
+     * ~300ms instead, so the page moves about 16px in the busiest frame
+     * rather than 100. Normalised by 60 that is v=0.26 — a quarter of the
+     * effect, for input the user cannot tell apart.
+     *
+     * The demo had `scroll-behavior: smooth` in its own stylesheet, which is
+     * how this hid: the two velocity-driven effects looked broken while the
+     * progress-driven one looked fine, because progress does not care how
+     * fast you got there.
+     *
+     * At 30 a smooth-scrolled notch reaches 0.53 and anything faster
+     * saturates, which is the right trade: expressive enough to feel like
+     * speed, low enough that the common case is visible at all.
      *
      * FAST ATTACK, SLOW RELEASE — and the asymmetry is the whole point.
      *
@@ -199,7 +217,7 @@ function start(s) {
      * makes the effect snap off.
      */
     const y = window.scrollY;
-    const delta = (y - s.lastScrollY) / 60;
+    const delta = (y - s.lastScrollY) / 30;
     s.lastScrollY = y;
     const alvo = delta > 1 ? 1 : delta < -1 ? -1 : delta;
     s.velocity = Math.abs(alvo) > Math.abs(s.velocity)

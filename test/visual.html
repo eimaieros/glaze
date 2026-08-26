@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>glaze — visual verification</title>
+<style>
+  :root{ --bg:#070709; --fg:#eeeef0; --dim:#8a8a95; --acc:#ff3d1f;
+         --ok:#4ad08a; --bad:#ff3d1f; --line:rgba(255,255,255,.09);
+         --mono:ui-monospace,'JetBrains Mono',SFMono-Regular,Menlo,monospace; }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--fg);font:400 15px/1.6 ui-sans-serif,system-ui,sans-serif;padding:40px 28px 80px}
+  .wrap{max-width:940px;margin:0 auto}
+  h1{font-size:2rem;letter-spacing:-.03em;margin-bottom:6px}
+  h1 em{font-style:normal;color:var(--acc)}
+  p{color:var(--dim);max-width:64ch;margin-bottom:10px}
+  code{font-family:var(--mono);font-size:.86em;color:#c9c9d2}
+  table{width:100%;border-collapse:collapse;margin:26px 0;font-family:var(--mono);font-size:.8rem}
+  th{text-align:left;color:var(--dim);font-weight:400;letter-spacing:.12em;text-transform:uppercase;
+     font-size:.64rem;padding:8px 10px;border-bottom:1px solid var(--line)}
+  td{padding:9px 10px;border-bottom:1px solid var(--line)}
+  td.n{text-align:right}
+  .pass{color:var(--ok)} .fail{color:var(--bad)}
+  #verdict{font-family:var(--mono);font-size:1.05rem;padding:16px 18px;border-radius:5px;
+           border:1px solid var(--line);border-left:3px solid var(--dim);margin:24px 0}
+  #verdict.pass{border-left-color:var(--ok)} #verdict.fail{border-left-color:var(--bad)}
+  figure{margin:0} figure img,figure canvas{width:100%;display:block;border:1px solid var(--line);border-radius:3px}
+  figcaption{font-family:var(--mono);font-size:.64rem;letter-spacing:.14em;text-transform:uppercase;
+             color:var(--dim);margin-top:7px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:26px}
+  .note{font-size:.85rem;color:var(--dim);border-left:2px solid var(--line);padding-left:14px;margin:18px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>glaze — visual verification<em>.</em></h1>
+  <p>
+    Node cannot run WebGPU, so the test suite can prove the library is correct
+    but not that anything is <em>visible</em>. This page closes that gap: it
+    renders each effect and measures how much it actually changed the pixels.
+  </p>
+  <p class="note">
+    Every one of the four times this library appeared broken, the unit tests
+    were green. Twice the shader was fine and the demo's own image or stylesheet
+    made the effect invisible. A number with a floor under it is the only thing
+    that catches that.
+  </p>
+
+  <div id="verdict">running…</div>
+  <table id="results">
+    <thead><tr><th>effect</th><th>condition</th><th style="text-align:right">change</th>
+    <th style="text-align:right">floor</th><th>verdict</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <div class="grid" id="shots"></div>
+</div>
+
+<script type="module">
+import { Stage, Layer, EFFECTS } from '../src/index.js';
+
+/* Same generator as the demo. If you change one, change both — the density is
+   load-bearing, see the comment in demo/index.html. */
+function field(seed, hueA, hueB, lines = 150) {
+  const w = 1280, h = 720;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, w, h);
+  g.addColorStop(0, `hsl(${hueA} 62% 10%)`);
+  g.addColorStop(.5, `hsl(${(hueA + hueB) / 2} 54% 20%)`);
+  g.addColorStop(1, `hsl(${hueB} 70% 8%)`);
+  x.fillStyle = g; x.fillRect(0, 0, w, h);
+  let s = seed;
+  const rnd = () => (s = (s * 1103515245 + 12345) % 2147483648) / 2147483648;
+  x.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < lines; i++) {
+    const y0 = (i / lines) * h * 1.25 - h * 0.12;
+    const amp = 18 + rnd() * 34, f1 = .004 + rnd() * .004, f2 = .017 + rnd() * .020;
+    x.beginPath(); x.moveTo(0, y0);
+    for (let px = 0; px <= w; px += 6)
+      x.lineTo(px, y0 + Math.sin(px * f1 + i * .5) * amp + Math.sin(px * f2 + i * 1.7) * amp * .42);
+    x.strokeStyle = `hsla(${hueB} 92% ${58 + rnd() * 18}% / ${.30 + rnd() * .34})`;
+    x.lineWidth = .7 + rnd() * 1.1; x.stroke();
+  }
+  x.globalCompositeOperation = 'source-over';
+  return c.toDataURL('image/jpeg', 0.92);
+}
+
+/** The velocity filter from src/index.js, applied to a position curve. */
+function velocidade(deltasPx) {
+  let v = 0, pico = 0;
+  for (const px of deltasPx) {
+    const delta = px / 30;
+    const alvo = delta > 1 ? 1 : delta < -1 ? -1 : delta;
+    v = Math.abs(alvo) > Math.abs(v) ? alvo : v * 0.90 + alvo * 0.10;
+    if (Math.abs(v) > Math.abs(pico)) pico = v;
+  }
+  return pico;
+}
+/** A wheel notch under scroll-behavior:smooth / Lenis: 100px eased over 300ms. */
+const suave = (() => {
+  const n = 18, pos = [];
+  for (let i = 0; i <= n; i++) pos.push(100 * (1 - Math.pow(1 - i / n, 3)));
+  return Array.from({ length: n }, (_, i) => pos[i + 1] - pos[i]);
+})();
+
+const V_SUAVE  = velocidade(suave);
+const V_NATIVA = velocidade([100, 0, 0, 0]);
+
+const el = document.createElement('img');
+el.style.cssText = 'position:fixed;left:-9999px;top:0;width:1024px';
+document.body.appendChild(el);
+await new Promise((r) => { el.onload = r; el.onerror = r; el.src = field(7, 12, 340); });
+
+const stage = new Stage();
+const arrancou = await stage.init();
+const tbody = document.querySelector('#results tbody');
+const veredicto = document.getElementById('verdict');
+
+if (!arrancou) {
+  veredicto.className = 'fail';
+  veredicto.textContent = `no WebGPU here (${stage.failed}) — nothing to measure. `
+    + `That is a correct degradation, not a failure of the library, but this page `
+    + `cannot tell you anything on this browser.`;
+} else {
+  const ler = () => {
+    const t = document.createElement('canvas');
+    t.width = stage.canvas.width; t.height = stage.canvas.height;
+    t.getContext('2d').drawImage(stage.canvas, 0, 0);
+    return t.getContext('2d');
+  };
+  async function desenha(efeito, vel, prog, strength) {
+    const L = new Layer(el, stage, EFFECTS[efeito], `${efeito}${vel}${prog}${strength}`, { strength });
+    await L.load();
+    L.clip = [-0.9, 0.9, 1.8, 1.8]; L.aspect = 16 / 9; L.progress = prog; L.visible = true;
+    L.update(3.7, vel, { x: .5, y: .5, near: 0 });
+    stage.render([L]);
+    const cx = ler(); L.destroy();
+    return cx;
+  }
+  const difere = (a, b) => {
+    const A = a.getImageData(0, 0, a.canvas.width, a.canvas.height).data;
+    const B = b.getImageData(0, 0, b.canvas.width, b.canvas.height).data;
+    let soma = 0, n = 0;
+    for (let i = 0; i < A.length; i += 16) {
+      if (A[i + 3] < 200 && B[i + 3] < 200) continue;
+      soma += Math.abs(A[i] - B[i]) + Math.abs(A[i + 1] - B[i + 1]) + Math.abs(A[i + 2] - B[i + 2]);
+      n++;
+    }
+    return +(soma / Math.max(n, 1)).toFixed(1);
+  };
+
+  /**
+   * 25 out of 765. Below that nobody notices anything is happening: the
+   * version of this demo that shipped with a smooth gradient measured 6.6 and
+   * was reported as completely broken, three separate times.
+   */
+  const PISO = 25;
+  const casos = [
+    ['displace', 'still — must be identical',        0,        .5,  .7,   0, 'exact'],
+    ['displace', 'smooth scroll (Lenis, CSS)',       V_SUAVE,  .5,  .7,   PISO, 'min'],
+    ['displace', 'native wheel scroll',              V_NATIVA, .5,  .7,   PISO, 'min'],
+    ['rgb',      'still — must be identical',        0,        .5,  .35,  0, 'exact'],
+    ['rgb',      'smooth scroll (Lenis, CSS)',       V_SUAVE,  .5,  .35,  PISO, 'min'],
+    ['rgb',      'native wheel scroll',              V_NATIVA, .5,  .35,  PISO, 'min'],
+    ['reveal',   'progress 0 → 0.5',                 0,        .5,  1,    PISO, 'min'],
+  ];
+
+  const base = {
+    displace: await desenha('displace', 0, .5, .7),
+    rgb:      await desenha('rgb',      0, .5, .35),
+    reveal:   await desenha('reveal',   0, 0,  1),
+  };
+
+  let falhas = 0;
+  for (const [efeito, rotulo, vel, prog, str, piso, modo] of casos) {
+    const d = difere(base[efeito], await desenha(efeito, vel, prog, str));
+    const ok = modo === 'exact' ? d === 0 : d >= piso;
+    if (!ok) falhas++;
+    tbody.insertAdjacentHTML('beforeend',
+      `<tr><td>${efeito}</td><td>${rotulo}</td><td class="n">${d}</td>` +
+      `<td class="n">${modo === 'exact' ? '= 0' : '≥ ' + piso}</td>` +
+      `<td class="${ok ? 'pass' : 'fail'}">${ok ? 'PASS' : 'FAIL'}</td></tr>`);
+  }
+
+  veredicto.className = falhas ? 'fail' : 'pass';
+  veredicto.textContent = falhas
+    ? `${falhas} of ${casos.length} failed — at least one effect is running and invisible.`
+    : `all ${casos.length} pass. Every effect visibly changes the image when it should, `
+      + `and leaves it untouched when it should not.`;
+
+  // Side by side, because a number is not a look.
+  const shots = document.getElementById('shots');
+  for (const [ef, vel, prog, str, rot] of [
+    ['displace', 0, .5, .7, 'displace · still'],
+    ['displace', V_SUAVE, .5, .7, 'displace · smooth scroll'],
+    ['rgb', 0, .5, .35, 'rgb · still'],
+    ['rgb', V_SUAVE, .5, .35, 'rgb · smooth scroll'],
+  ]) {
+    const cx = await desenha(ef, vel, prog, str);
+    const t = document.createElement('canvas');
+    t.width = 640; t.height = Math.round(640 * cx.canvas.height / cx.canvas.width);
+    t.getContext('2d').drawImage(cx.canvas, 0, 0, t.width, t.height);
+    const fig = document.createElement('figure');
+    fig.append(t, Object.assign(document.createElement('figcaption'), { textContent: rot }));
+    shots.append(fig);
+  }
+  stage.destroy();
+}
+</script>
+</body>
+</html>

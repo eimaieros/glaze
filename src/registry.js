@@ -13,9 +13,15 @@
  * (framebudget ships a detector for exactly this; that is where the rule came
  * from.) So `measure()` reads every rect in one pass and touches nothing else.
  *
- * The second job is not measuring at all when nothing has moved. Scroll and
- * resize set a dirty flag; frames where the flag is clear reuse the last
- * measurement. On a still page the per-frame layout cost is zero.
+ * The second job is not measuring at all when nothing has moved. Scroll, window
+ * resize and ResizeObserver set a dirty flag; frames where the flag is clear
+ * reuse the last measurement. On a still page the per-frame layout cost is zero.
+ *
+ * Those three cover different things and all three are needed. Scroll and window
+ * resize are about the viewport moving under the element. ResizeObserver is
+ * about the element's own box changing while the viewport sits still — a font
+ * loading, an accordion opening, a grid reflowing. Miss that third one and the
+ * quad silently drifts off the image it is standing in for.
  */
 
 /**
@@ -36,6 +42,8 @@ export class Registry {
     this.dirty = true;
     /** @type {IntersectionObserver|null} */
     this._io = null;
+    /** @type {ResizeObserver|null} */
+    this._ro = null;
     this._onScroll = () => { this.dirty = true; };
 
     if (typeof this.win.addEventListener === 'function') {
@@ -63,6 +71,34 @@ export class Registry {
         { rootMargin: '100% 0px' }
       );
     }
+
+    /**
+     * THE CASE SCROLL AND RESIZE DO NOT COVER.
+     *
+     * The dirty flag was set by exactly two events, and both are about the
+     * viewport. But an element's rect can change while the viewport sits
+     * perfectly still:
+     *
+     *   - a webfont finishes loading and the paragraph above the image reflows
+     *   - a `<details>` opens, an accordion expands, a filter removes a card
+     *   - a CSS grid reflows because a sibling's content changed
+     *   - the image itself gets its intrinsic size once it decodes, and a
+     *     container with `height: auto` grows underneath it
+     *
+     * In every one of those the quad stays where it last measured and the real
+     * element moves out from under it. There is no error, no warning, and
+     * nothing in a test catches it — the effect is simply drawn in the wrong
+     * place, and it stays wrong until the next scroll. The font case is the
+     * nastiest, because it happens once, early, on exactly the first load a
+     * visitor sees and never again on a warm cache.
+     *
+     * `ResizeObserver` fires for the element's own box changing. It does not
+     * fire for an element merely *moving*, which is why the scroll listener
+     * stays: between them they cover size and position.
+     */
+    if (typeof this.win.ResizeObserver === 'function') {
+      this._ro = new this.win.ResizeObserver(() => { this.dirty = true; });
+    }
   }
 
   /** @param {any} item @returns {any} */
@@ -70,6 +106,7 @@ export class Registry {
     item.onScreen = true;
     this.items.add(item);
     this._io?.observe(item.el);
+    this._ro?.observe(item.el);
     this.dirty = true;
     return item;
   }
@@ -77,6 +114,7 @@ export class Registry {
   /** @param {any} item */
   remove(item) {
     this._io?.unobserve(item.el);
+    this._ro?.unobserve(item.el);
     this.items.delete(item);
   }
 
@@ -92,6 +130,16 @@ export class Registry {
     // Pass 1 — read. Nothing in this loop writes to the DOM.
     for (const item of this.items) {
       if (!item.onScreen) { item.visible = false; continue; }
+
+      /**
+       * An element detached from the document still answers
+       * getBoundingClientRect() — with zeroes. Left alone that becomes a
+       * degenerate quad drawn at the top-left corner of the screen, which
+       * looks like a rendering bug and is actually a lifecycle one. Common in
+       * any framework that replaces DOM on navigation.
+       */
+      if (item.el.isConnected === false) { item.visible = false; continue; }
+
       const r = item.el.getBoundingClientRect();
       item.rect = r;
       item.visible = r.bottom > 0 && r.top < vh && r.width > 0 && r.height > 0;
@@ -124,6 +172,7 @@ export class Registry {
       this.win.removeEventListener('resize', this._onScroll);
     }
     this._io?.disconnect();
+    this._ro?.disconnect();
     this.items.clear();
   }
 }

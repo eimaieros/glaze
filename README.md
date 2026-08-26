@@ -534,7 +534,7 @@ Also exported: `EFFECTS`, `Stage`, `Layer`, `destroyAll()`.
 ## Tests
 
 ```bash
-npm test          # 83 tests, no browser, no GPU
+npm test          # 86 tests, no browser, no GPU
 open test/visual.html   # the part Node cannot check: is anything visible?
 npm run check     # types + tests
 ```

@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The quad drifted when the layout changed without a scroll.** The dirty flag
+  was set by two events and both are about the viewport, but an element's rect
+  can move while the viewport sits perfectly still: a webfont lands and the
+  paragraph above reflows, a `<details>` opens, a grid reflows because a sibling
+  changed, the image gets its intrinsic size once it decodes. In all of those
+  the effect stayed where it last measured and the real element moved out from
+  under it — no error, no warning, wrong pixels until the next scroll. The font
+  case is the nastiest: it happens once, early, on exactly the first load a
+  visitor sees and never again on a warm cache.
+
+  A `ResizeObserver` now covers the element's own box; scroll still covers it
+  moving. Both are needed and neither is enough.
+
+- **A detached element was drawn as a degenerate quad.** An element removed
+  from the document still answers `getBoundingClientRect()` — with zeroes,
+  which became a zero-size quad at the top-left corner. It looks like a
+  rendering bug and is a lifecycle one, and any framework that swaps DOM on
+  navigation produces it.
+
 ### Changed
 
 - TypeScript 5 → 7 for the declaration build, with `rootDir` now explicit in

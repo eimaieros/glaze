@@ -6,9 +6,9 @@ WebGPU shader driven by scroll. If anything fails, the page keeps its images.
 [![CI](https://github.com/eimaieros/glaze/actions/workflows/ci.yml/badge.svg)](https://github.com/eimaieros/glaze/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![No dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
-![16.1 KB minified](https://img.shields.io/badge/minified-16.1%20KB-informational)
+![16.3 KB minified](https://img.shields.io/badge/minified-16.3%20KB-informational)
 
-No dependencies. 16.1 KB minified, 6.6 KB gzipped. Ships TypeScript types.
+No dependencies. 16.3 KB minified, 6.6 KB gzipped. Ships TypeScript types.
 
 ```js
 glaze('#hero img', { effect: 'displace' });

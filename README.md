@@ -195,6 +195,39 @@ neither the canvas content nor the images.
 
 ---
 
+## The promise that never settles
+
+`HTMLImageElement.decode()` is the polite way to prepare an image: it resolves
+once the bitmap is ready, so `createImageBitmap` does not block the main thread
+on a synchronous decode. `load()` awaited it directly.
+
+In Chrome, **`decode()` never settles while the document is hidden.** Not
+resolved, not rejected — never. Verified on the live demo: `decode()` was still
+pending after 2.5 seconds while `createImageBitmap()` resolved normally on the
+very same element, in the same tick.
+
+So a page opened in a background tab — a middle-click, a restored session,
+"open all bookmarks in new tabs" — sat on that await forever. No Layer was
+created, `start()` was never called, and glaze did nothing at all for the rest
+of the page's life. The most literal possible version of "I opened it and
+nothing happens".
+
+`try/catch` is no help: a promise that never settles is not an error. The only
+defence is a deadline.
+
+```js
+await Promise.race([
+  this.el.decode(),
+  new Promise((resolve) => setTimeout(resolve, 250)),
+]);
+```
+
+The decode was always an optimisation — `createImageBitmap` does not require it
+and works either way — so anything slower than a frame or two is not worth
+waiting for.
+
+---
+
 ## The four decisions worth explaining
 
 ### 1. Upload the texture before hiding the element
@@ -330,6 +363,7 @@ the test suite, where the message can say why.
 | no canvas context | canvas is removed again, images stay |
 | device lost mid-session | elements restored, canvas removed, `ready` flips false |
 | image fails to decode | that element is skipped, the others still run |
+| `decode()` never settles | given up on after 250ms — see below |
 | `prefers-reduced-motion` | returns an inert handle, nothing is touched |
 | framebudget says `minimal` | elements restored, canvas cleared, loop keeps watching |
 | tab goes to the background | elements restored — Chrome suspends rAF entirely |
@@ -369,7 +403,7 @@ Also exported: `EFFECTS`, `Stage`, `Layer`, `destroyAll()`.
 ## Tests
 
 ```bash
-npm test          # 76 tests, no browser, no GPU
+npm test          # 79 tests, no browser, no GPU
 npm run check     # types + tests
 ```
 
@@ -392,8 +426,9 @@ upload, swapping `visibility` for `display`, giving an effect its own
 `@group(0)`, deleting the dirty-flag early return, making `init()` throw instead
 of returning `false`, restoring the low-pass velocity filter, and putting
 `scale` back in `defaults` without wiring it, removing the re-entrancy guard
-from `init()`, and putting the render-nothing branch back in the `minimal` tier.
-All nine were caught, by the test that names the problem.
+from `init()`, putting the render-nothing branch back in the `minimal` tier, and
+awaiting `decode()` directly again. All ten were caught, by the test that names
+the problem.
 
 What none of them can cover is whether the shaders look right. That is what
 `demo/` is for, and there is no substitute for opening it.

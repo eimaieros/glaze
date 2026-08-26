@@ -113,6 +113,57 @@ test('a decode failure leaves the element completely alone', async () => {
   assert.ok(!log.some((l) => l.startsWith('hide:')), `nothing hid it. Log: ${log.join(' → ')}`);
 });
 
+/**
+ * The hang.
+ *
+ * In Chrome, `HTMLImageElement.decode()` never settles while the document is
+ * hidden — it does not resolve and it does not reject. `load()` awaited it
+ * directly, so a page opened in a background tab (a middle-click, a restored
+ * session, "open all bookmarks in new tabs") sat on that await forever: no
+ * Layer was created, `start()` was never called, and glaze did nothing for the
+ * rest of the page's life. "I opened it and nothing happens", exactly.
+ *
+ * Verified on the live demo: `decode()` hung past 2.5 seconds while
+ * `createImageBitmap()` resolved normally on the very same element.
+ *
+ * try/catch cannot help here. A promise that never settles is not an error.
+ */
+test('a decode() that never settles does not stall the whole library', async () => {
+  const log = [];
+  globalThis.createImageBitmap = async () => ({ width: 4, height: 4, close() {} });
+
+  const el = fakeImg(log);
+  el.decode = () => new Promise(() => {});      // exactly what a hidden tab does
+
+  const layer = new Layer(el, fakeStage(log), EFFECTS.displace, 'displace', {});
+  const resultado = await Promise.race([
+    layer.load(),
+    new Promise((r) => setTimeout(() => r('PENDUROU'), 3000)),
+  ]);
+
+  assert.equal(resultado, true,
+    'load() must give up on the decode and carry on — createImageBitmap does not need it');
+  assert.equal(el.style.visibility, 'hidden', 'and the layer must have taken over');
+});
+
+test('a decode() that rejects is also survivable', async () => {
+  const log = [];
+  globalThis.createImageBitmap = async () => ({ width: 4, height: 4, close() {} });
+  const el = fakeImg(log);
+  el.decode = () => Promise.reject(new Error('EncodingError'));
+  const layer = new Layer(el, fakeStage(log), EFFECTS.displace, 'displace', {});
+  assert.equal(await layer.load(), true);
+});
+
+test('an element with no decode() at all still loads', async () => {
+  const log = [];
+  globalThis.createImageBitmap = async () => ({ width: 4, height: 4, close() {} });
+  const el = fakeImg(log);
+  delete el.decode;
+  const layer = new Layer(el, fakeStage(log), EFFECTS.rgb, 'rgb', {});
+  assert.equal(await layer.load(), true);
+});
+
 test('an image with no src is skipped before any GPU work', async () => {
   const log = [];
   const el = fakeImg(log, '');

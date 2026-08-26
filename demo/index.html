@@ -62,6 +62,10 @@
   }
   .hud b{color:var(--fg);font-weight:500;float:right}
   .hud .warn{color:var(--acc)}
+  .hud .build{
+    margin-top:8px;padding-top:7px;border-top:1px solid var(--line);
+    font-size:.6rem;letter-spacing:.04em;color:#5f5f6b;clear:both;
+  }
 
   footer{padding:14vh 0 20vh;border-top:1px solid var(--line);color:var(--dim)}
   a{color:var(--acc)}
@@ -228,6 +232,11 @@ let frames = 0, ultimo = performance.now(), fps = 0;
   requestAnimationFrame(conta);
 })();
 
+/* A build stamp, because two hours went into debugging a fix that was already
+   published and that the browser refused to fetch. If this line and the file
+   on disk disagree, you are looking at a cached page — hard reload. */
+const BUILD = '2026-08-26 · one-device + suspend + decode-race';
+
 setInterval(() => {
   const todas = [...a.elements, ...b.elements, ...c.elements];
   // A layer that has handed its element back is not drawing. Say so, rather
@@ -239,7 +248,8 @@ setInterval(() => {
     `reduced motion <b>${reduced ? 'yes' : 'no'}</b><br>` +
     `drawing <b>${aDesenhar} / ${todas.length}</b><br>` +
     `fps <b>${document.hidden ? 'tab hidden' : fps}</b><br>` +
-    (aDesenhar ? '' : '<span class="warn">images shown as-is</span>');
+    (aDesenhar ? '' : '<span class="warn">images shown as-is</span>') +
+    `<div class="build">${BUILD}</div>`;
 }, 400);
 </script>
 

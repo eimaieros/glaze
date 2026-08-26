@@ -110,9 +110,31 @@ export class Layer {
 
     let bitmap;
     try {
-      // `decode()` first so the bitmap is ready without blocking the main
-      // thread on a synchronous decode inside createImageBitmap.
-      if (this.el.decode) { try { await this.el.decode(); } catch { /* cached-error images */ } }
+      /**
+       * `decode()` first, so the bitmap is ready without blocking the main
+       * thread on a synchronous decode inside createImageBitmap.
+       *
+       * BUT IT MUST BE RACED. In Chrome, `HTMLImageElement.decode()` never
+       * settles while the document is hidden — not rejected, not resolved,
+       * just never. A page opened in a background tab (a middle-click, a
+       * restored session, "open all bookmarks") would sit on this await
+       * forever: no Layer is ever created, `start()` is never called, and the
+       * library does precisely nothing for the rest of the page's life.
+       * Verified on the live demo — `decode()` hangs, `createImageBitmap()`
+       * resolves normally on the very same element.
+       *
+       * The decode is an optimisation. `createImageBitmap` does not need it
+       * and works either way, so anything slower than a frame or two is not
+       * worth waiting for.
+       */
+      if (typeof this.el.decode === 'function') {
+        try {
+          await Promise.race([
+            this.el.decode(),
+            new Promise((resolve) => setTimeout(resolve, 250)),
+          ]);
+        } catch { /* cached-error images */ }
+      }
       bitmap = await createImageBitmap(this.el, { colorSpaceConversion: 'none' });
     } catch {
       return false;

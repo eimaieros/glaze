@@ -130,8 +130,13 @@ fn fs(@location(0) uv : vec2f) -> @location(0) vec4f {
 
   /**
    * Chromatic split on scroll velocity. Cheap, instantly recognisable, and the
-   * one effect where restraint matters most — past about 0.4 it stops looking
-   * like optics and starts looking like a broken screen.
+   * one effect where restraint matters most — past about 0.5 strength it stops
+   * looking like optics and starts looking like a broken screen.
+   *
+   * It also needs an image with some colour range in it: aberration separates
+   * the red and blue channels, so on a near-monochrome image one ghost is
+   * strong, the other is swallowed, and the result reads as blur rather than
+   * as a fringe. See the note in the README.
    */
   rgb: {
     defaults: { strength: 0.35 },
@@ -139,10 +144,17 @@ fn fs(@location(0) uv : vec2f) -> @location(0) vec4f {
 @fragment
 fn fs(@location(0) uv : vec2f) -> @location(0) vec4f {
   let vel = clamp(u.params.w, -1.0, 1.0);
-  /* 0.05, up from 0.015 then 0.03. At the first value the default strength
+  /* 0.11, up from 0.015 → 0.03 → 0.05. At the first value the default strength
      moved the red and blue taps three pixels apart on a 576px image, which is
-     not an effect, it is a rounding error. */
-  let amount = u.params.y * 0.05 * vel;
+     not an effect, it is a rounding error; at 0.05 it was nine, which reads as
+     a fringe but a timid one.
+
+     Note that hue shift stops being a useful measure here: it saturates around
+     60 degrees once any fringe exists at all, whether that fringe is nine
+     pixels wide or thirty. What reads as intensity is the WIDTH. So this one
+     was chosen by looking, with the numbers only used to rule out the options
+     that were obviously too far. */
+  let amount = u.params.y * 0.11 * vel;
 
   // Split vertically, because scrolling is vertical. Splitting on x here is the
   // mistake that makes this effect look pasted on.
@@ -152,13 +164,13 @@ fn fs(@location(0) uv : vec2f) -> @location(0) vec4f {
      effect. Measured in the central third, this took the change from 24.1 to
      54.0. Real lenses do aberrate more at the edges, so the gradient stays -
      it just no longer starts from nothing. */
-  let w = 0.45 + 0.55 * smoothstep(0.0, 0.7, length(uv - 0.5));
+  let w = 0.5 + 0.5 * smoothstep(0.0, 0.7, length(uv - 0.5));
   let off = vec2f(0.0, amount) * w;
 
   // Same inset as displace, and for the same reason: the red and blue taps
   // move in opposite directions, so without it one of them always smears the
   // top or bottom edge on a fast scroll. See the note in the displace effect.
-  let inset = u.params.y * 0.05;
+  let inset = u.params.y * 0.11;
   let base = uv * (1.0 - 2.0 * inset) + inset;
 
   let r = textureSample(tex, samp, clamp(base + off, vec2f(0.0), vec2f(1.0))).r;

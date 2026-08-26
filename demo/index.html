@@ -151,8 +151,11 @@
     <p>
       The split is vertical because scrolling is vertical — splitting on the
       other axis is the mistake that makes this effect look pasted on. Past
-      about <code>0.4</code> strength it stops reading as optics and starts
-      reading as a broken screen, so the default is well under that.
+      about <code>0.5</code> strength it stops reading as optics and starts
+      reading as a broken screen, so the default is well under that. It also
+      needs an image with colours to separate — on a near-monochrome photograph
+      this effect does almost nothing, which is a property of the image and not
+      of the shader.
     </p>
     <figure>
       <img id="c" alt="Generated teal and violet line field, its colours splitting apart on scroll">
@@ -336,7 +339,7 @@ let frames = 0, ultimo = performance.now(), fps = 0;
 /* A build stamp, because two hours went into debugging a fix that was already
    published and that the browser refused to fetch. If this line and the file
    on disk disagree, you are looking at a cached page — hard reload. */
-const BUILD = '2026-08-26f · palette the rgb split can be seen on';
+const BUILD = '2026-08-26g · chromatic split at 0.11';
 
 setInterval(() => {
   const todas = [...a.elements, ...b.elements, ...c.elements];

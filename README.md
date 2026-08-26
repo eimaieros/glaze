@@ -192,6 +192,12 @@ a shift in **hue**, not in brightness.
 | red / blue (20° → 250°) | 43.4° | yes |
 | teal / violet (30° → 300°) | **61.1°** | unmistakable |
 
+One caveat on that metric, since it is easy to over-trust: hue shift tells you
+**whether** there is a fringe, not how wide it is. It saturates around 60°
+once any fringe exists, whether that fringe is nine pixels or thirty. Choosing
+the final strength meant looking at the four options side by side; the numbers
+only ruled out the ones that were obviously wrong.
+
 So `rgb` belongs on images with some colour range in them. On a duotone, a
 sepia photograph or anything close to monochrome, use `displace` — it moves
 pixels and does not care what colour they are.

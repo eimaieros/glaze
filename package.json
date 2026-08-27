@@ -20,9 +20,10 @@
   "scripts": {
     "test": "node --test test/*.test.js",
     "types": "node tools/clean-types.js && tsc",
-    "check": "npm run types && npm test && npm run size",
+    "check": "npm run types && npm test && npm run size && npm run contagem",
     "prepare": "npm run types",
-    "size": "node tools/tamanho.js"
+    "size": "node tools/tamanho.js",
+    "contagem": "node tools/contagem.js"
   },
   "keywords": [
     "webgpu",

@@ -37,22 +37,39 @@ const argumentos = process.argv.slice(2);
 const corrigir = argumentos.includes('--fix');
 const ficheiroTap = argumentos.find((a) => !a.startsWith('--'));
 
-/** The number of passing tests, from a TAP stream. */
-function contar(tap) {
-  // `# pass N` is the summary node --test prints at the end. Fail loudly rather
-  // than defaulting to 0, because a silent 0 would make the check pass exactly
-  // when it stopped working.
-  const m = tap.match(/^# pass (\d+)$/m);
-  if (!m) {
-    console.error('contagem: nao encontrei "# pass N" na saida dos testes.');
+/**
+ * The number of passing tests, from whatever `node --test` printed.
+ *
+ * TWO FORMATS, AND THE REASON IS A BUG THIS CAUGHT.
+ *
+ *   TAP reporter    # pass 37
+ *   spec reporter   ℹ pass 37
+ *
+ * The first version of this only knew the TAP form, because the CI step asked
+ * for TAP. It went red on Node 24 and green on Node 22, off the same commit.
+ *
+ * The cause: `npm test -- --test-reporter=tap` puts the flag AFTER the file
+ * arguments, and Node 24 ignores a node option in that position where Node 22
+ * honoured it. So Node 24 was quietly running the spec reporter while the
+ * workflow step was called "Tests, with the TAP kept".
+ *
+ * The step now passes the flag before the files, which fixes the cause. This
+ * reads both anyway: counting tests should not depend on which reporter ran.
+ */
+function contar(saida) {
+  const passou = saida.match(/^(?:#|ℹ)\s*pass (\d+)$/m);
+  if (!passou) {
+    console.error('contagem: nao encontrei "pass N" na saida dos testes.');
+    console.error('        Ultimas linhas:');
+    console.error(saida.trimEnd().split('\n').slice(-6).map((l) => '        ' + l).join('\n'));
     process.exit(1);
   }
-  const falhados = tap.match(/^# fail (\d+)$/m);
+  const falhados = saida.match(/^(?:#|ℹ)\s*fail (\d+)$/m);
   if (falhados && Number(falhados[1]) > 0) {
     console.error(`contagem: ${falhados[1]} testes a falhar — corrige isso primeiro.`);
     process.exit(1);
   }
-  return Number(m[1]);
+  return Number(passou[1]);
 }
 
 /** Run the suite and return its TAP. spawnSync, not execFileSync, because a

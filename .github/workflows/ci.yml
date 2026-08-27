@@ -39,10 +39,13 @@ jobs:
       # that failed everything would report success. The sibling portfolio repo
       # shipped exactly that bug as `node harness.js | tail -1` and printed
       # "Tudo passa" while its first check was crashing.
+      # Flag BEFORE the files. `npm test -- --test-reporter=tap` puts it after,
+      # and Node 24 ignores a node option in that position where Node 22 honours
+      # it — a step called "Tests, with the TAP kept" that kept no TAP on 24.
       - name: Tests, with the TAP kept
         run: |
           set -o pipefail
-          npm test -- --test-reporter=tap | tee /tmp/testes.tap
+          node --test --test-reporter=tap test/*.test.js | tee /tmp/testes.tap
 
       - name: The docs still state the right number of tests
         run: node tools/contagem.js /tmp/testes.tap

@@ -22,8 +22,31 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
-      - run: npm ci || npm install
-      - run: npm test
+      # `npm ci`, and nothing after it. This was `npm ci || npm install`, so a
+      # lockfile out of step with package.json would not fail the run - and
+      # then esbuild was added as a devDep without regenerating the lockfile,
+      # `npm ci` failed exactly as designed, `npm install` covered for it, and
+      # CI went green over a repository nobody could reproduce with `npm ci`.
+      # The fallback did not tolerate the problem; it concealed it.
+      - run: npm ci
+
+      # TAP goes to a file so the count check can read the run that just
+      # happened instead of executing this suite - 111 seconds of jsdom - a
+      # second time.
+      #
+      # `set -o pipefail` is why this is a block. In a pipeline the exit status
+      # is the last command's, and `tee` always succeeds, so without it a suite
+      # that failed everything would report success. The sibling portfolio repo
+      # shipped exactly that bug as `node harness.js | tail -1` and printed
+      # "Tudo passa" while its first check was crashing.
+      - name: Tests, with the TAP kept
+        run: |
+          set -o pipefail
+          npm test -- --test-reporter=tap | tee /tmp/testes.tap
+
+      - name: The docs still state the right number of tests
+        run: node tools/contagem.js /tmp/testes.tap
+
       # Redundant on paper - `prepare` already ran tsc during install - but kept
       # explicit so a type error is its own failed step instead of hiding inside
       # the install output.
@@ -32,5 +55,7 @@ jobs:
       # The README states a minified size in two places. Both were true when
       # they were written and both went quietly false the moment a module was
       # added. A number typed into prose is a measurement with no instrument
-      # behind it; this is the instrument.
+      # behind it; this is the instrument. contagem.js above is the same idea
+      # pointed at the test count, which drifted the same way: the README said
+      # 86 and CONTRIBUTING said 83, on the same commit.
       - run: npm run size

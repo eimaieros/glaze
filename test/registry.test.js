@@ -75,6 +75,15 @@ test('a zero-size element is never visible', () => {
   assert.equal(i.visible, false);
 });
 
+test('a zero-size viewport reads no layout and emits no invalid clip values', () => {
+  const r = new Registry({ window: fakeWindow(0, 0) });
+  let reads = 0;
+  const i = r.add({ el: { getBoundingClientRect() { reads++; return R(0, 0, 10, 10); } } });
+  r.measure();
+  assert.equal(reads, 0);
+  assert.equal(i.visible, false);
+});
+
 test('measure() reads nothing when the page has not moved', () => {
   const r = new Registry({ window: fakeWindow() });
   let reads = 0;

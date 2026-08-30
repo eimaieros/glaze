@@ -98,6 +98,9 @@ export class Stage {
      * difference almost nobody can see, and these shaders are fragment-bound.
      */
     this.maxPixelRatio = opts.maxPixelRatio ?? 2;
+    if (!Number.isFinite(this.maxPixelRatio) || this.maxPixelRatio <= 0) {
+      throw new RangeError('Stage: maxPixelRatio must be a finite number > 0');
+    }
 
     /** @type {GPUDevice|null} */
     this.device = null;

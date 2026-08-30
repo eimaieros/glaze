@@ -127,6 +127,15 @@ export class Registry {
     const vh = this.win.innerHeight || 0;
     const vw = this.win.innerWidth || 0;
 
+    // During prerendering and some embedded-webview transitions the viewport
+    // can briefly be 0×0. Dividing by it produces Infinity in the uniform
+    // buffer; skip both layout reads and drawing until resize marks us dirty.
+    if (vw <= 0 || vh <= 0) {
+      for (const item of this.items) item.visible = false;
+      this.dirty = false;
+      return;
+    }
+
     // Pass 1 — read. Nothing in this loop writes to the DOM.
     for (const item of this.items) {
       if (!item.onScreen) { item.visible = false; continue; }

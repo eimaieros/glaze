@@ -8,7 +8,7 @@ speculating about why.
 
 ```bash
 npm install
-npm test          # 88 tests, no browser and no GPU needed
+npm test          # 91 tests, no browser and no GPU needed
 npm run check     # types as well
 ```
 

@@ -34,6 +34,20 @@ test('prefers-reduced-motion: does nothing at all', () => {
   assert.equal(el.style.visibility, '', 'the element must not be touched');
 });
 
+test('a matchMedia implementation that throws degrades safely', () => {
+  globalThis.matchMedia = () => { throw new Error('webview not ready'); };
+  const el = { style: { visibility: '' } };
+  assert.doesNotThrow(() => glaze([el], { effect: 'displace' }));
+  assert.equal(el.style.visibility, '');
+});
+
+test('numeric effect options are validated synchronously', () => {
+  const el = { style: { visibility: '' } };
+  assert.throws(() => glaze([el], { strength: Number.NaN }), RangeError);
+  assert.throws(() => glaze([el], { strength: 1.1 }), RangeError);
+  assert.throws(() => glaze([el], { effect: 'displace', scale: Infinity }), RangeError);
+});
+
 test('respectReducedMotion: false is honoured', () => {
   globalThis.matchMedia = () => ({ matches: true });
   // It still will not start without a GPU, but it must get past the motion
@@ -63,6 +77,8 @@ test('Stage caps the pixel ratio', () => {
   // and these shaders are fragment-bound.
   const custom = new Stage({ maxPixelRatio: 1 });
   assert.equal(custom.maxPixelRatio, 1);
+  assert.throws(() => new Stage({ maxPixelRatio: 0 }), RangeError);
+  assert.throws(() => new Stage({ maxPixelRatio: Infinity }), RangeError);
 });
 
 test('Stage.resize and destroy are safe before init', () => {

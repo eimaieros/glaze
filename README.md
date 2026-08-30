@@ -6,9 +6,9 @@ WebGPU shader driven by scroll. If anything fails, the page keeps its images.
 [![CI](https://github.com/eimaieros/glaze/actions/workflows/ci.yml/badge.svg)](https://github.com/eimaieros/glaze/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![No dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
-![16.4 KB minified](https://img.shields.io/badge/minified-16.4%20KB-informational)
+![17.2 KB minified](https://img.shields.io/badge/minified-17.2%20KB-informational)
 
-No dependencies. 16.4 KB minified, 6.6 KB gzipped. Ships TypeScript types.
+No dependencies. 17.2 KB minified, 6.9 KB gzipped. Ships TypeScript types.
 
 ```js
 glaze('#hero img', { effect: 'displace' });
@@ -500,6 +500,7 @@ the test suite, where the message can say why.
 | tab goes to the background | elements restored — Chrome suspends rAF entirely |
 | tab comes back | elements hidden again, drawing resumes |
 | unknown effect name | throws `RangeError` — a typo is a bug, not a degradation |
+| invalid numeric option | throws `RangeError` synchronously, before GPU work |
 
 The last row is the one asymmetry, and it's on purpose. Missing hardware is a
 fact about the visitor; `effect: 'displac'` is a fact about your code, and it
@@ -534,7 +535,7 @@ Also exported: `EFFECTS`, `Stage`, `Layer`, `destroyAll()`.
 ## Tests
 
 ```bash
-npm test          # 88 tests, no browser, no GPU
+npm test          # 91 tests, no browser, no GPU
 open test/visual.html   # the part Node cannot check: is anything visible?
 npm run check     # types + tests
 ```

@@ -66,8 +66,16 @@ function getShared() {
   return shared;
 }
 
-const prefersReducedMotion = () =>
-  typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const prefersReducedMotion = () => {
+  try {
+    return typeof matchMedia === 'function' &&
+      matchMedia('(prefers-reduced-motion: reduce)').matches === true;
+  } catch {
+    // Embedded webviews sometimes expose matchMedia before it is usable.
+    // Accessibility detection is an enhancement, never a reason to remove DOM.
+    return false;
+  }
+};
 
 /**
  * @param {string|HTMLElement|Iterable<HTMLElement>} target
@@ -112,6 +120,18 @@ export function glaze(target, options = {}) {
   // Validate the effect name even on the inert path. A typo should fail loudly
   // at the call site, not silently do nothing on the machines without WebGPU.
   const effect = getEffect(effectName);
+  const numericOptions = /** @type {Record<string, unknown>} */ (rest);
+  const strength = numericOptions.strength;
+  if (strength !== undefined &&
+      (typeof strength !== 'number' || !Number.isFinite(strength) || strength < 0 || strength > 1)) {
+    throw new RangeError('glaze: strength must be a finite number between 0 and 1');
+  }
+  for (const name of effect.extras ?? []) {
+    const value = numericOptions[name];
+    if (value !== undefined && (typeof value !== 'number' || !Number.isFinite(value))) {
+      throw new RangeError(`glaze: ${name} must be a finite number`);
+    }
+  }
 
   if (!nodes.length) return inert;
   if (respectReducedMotion && prefersReducedMotion()) return inert;
@@ -123,27 +143,48 @@ export function glaze(target, options = {}) {
   /** @type {Layer[]} */
   const created = [];
   let destroyed = false;
+  /** @type {Layer|null} */
+  let pending = null;
 
   (async () => {
-    const ok = await s.stage.init();
-    if (!ok || destroyed) return; // no WebGPU, or the caller already left
+    try {
+      const ok = await s.stage.init();
+      if (!ok || destroyed) return; // no WebGPU, or the caller already left
 
-    for (const node of nodes) {
-      if (destroyed) break;
-      const item = new Layer(/** @type {HTMLImageElement} */ (node), s.stage, effect, effectName, rest);
-      const loaded = await item.load();
-      if (!loaded) continue;
-      // destroy() may run while decode/upload is awaiting. Never let an
-      // already-destroyed handle hide an image or join the shared loop later.
-      if (destroyed) {
-        item.destroy();
-        continue;
+      for (const node of nodes) {
+        if (destroyed) break;
+        pending = new Layer(/** @type {HTMLImageElement} */ (node), s.stage, effect, effectName, rest);
+        const loaded = await pending.load();
+        if (!loaded) { pending = null; continue; }
+        // destroy() may run while decode/upload is awaiting. Never let an
+        // already-destroyed handle hide an image or join the shared loop later.
+        if (destroyed) {
+          pending.destroy();
+          pending = null;
+          continue;
+        }
+        s.registry.add(pending);
+        s.items.add(pending);
+        created.push(pending);
+        pending = null;
       }
-      s.registry.add(item);
-      s.items.add(item);
-      created.push(item);
+      if (s.items.size) start(s);
+    } catch (error) {
+      // A browser/GPU implementation can still throw somewhere an individual
+      // feature probe did not predict. Restore every element owned by this
+      // handle and contain the failure instead of creating an unhandled
+      // rejection with an image left hidden.
+      pending?.destroy();
+      pending = null;
+      for (const item of created) {
+        s.registry.remove(item);
+        s.items.delete(item);
+        item.destroy();
+      }
+      created.length = 0;
+      if (!s.items.size) stop(s);
+      globalThis.console?.warn?.('[glaze] effect disabled after an unexpected error', error);
     }
-    if (s.items.size) start(s);
   })();
 
   return {
@@ -151,6 +192,7 @@ export function glaze(target, options = {}) {
     get active() { return !destroyed && s.stage.ready && created.some((item) => item.ready); },
     destroy() {
       destroyed = true;
+      pending?.destroy();
       for (const item of created) {
         s.registry.remove(item);
         s.items.delete(item);

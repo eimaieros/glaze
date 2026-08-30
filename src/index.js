@@ -122,15 +122,23 @@ export function glaze(target, options = {}) {
 
   /** @type {Layer[]} */
   const created = [];
+  let destroyed = false;
 
   (async () => {
     const ok = await s.stage.init();
-    if (!ok) return; // no WebGPU. The images are already on screen. Done.
+    if (!ok || destroyed) return; // no WebGPU, or the caller already left
 
     for (const node of nodes) {
+      if (destroyed) break;
       const item = new Layer(/** @type {HTMLImageElement} */ (node), s.stage, effect, effectName, rest);
       const loaded = await item.load();
       if (!loaded) continue;
+      // destroy() may run while decode/upload is awaiting. Never let an
+      // already-destroyed handle hide an image or join the shared loop later.
+      if (destroyed) {
+        item.destroy();
+        continue;
+      }
       s.registry.add(item);
       s.items.add(item);
       created.push(item);
@@ -140,8 +148,9 @@ export function glaze(target, options = {}) {
 
   return {
     elements: created,
-    get active() { return s.stage.ready; },
+    get active() { return !destroyed && s.stage.ready && created.some((item) => item.ready); },
     destroy() {
+      destroyed = true;
       for (const item of created) {
         s.registry.remove(item);
         s.items.delete(item);
@@ -195,14 +204,19 @@ function start(s) {
   s.onVisibilidade = () => (document.hidden ? suspender(s) : retomar(s));
   document.addEventListener('visibilitychange', s.onVisibilidade);
 
-  // A lost device means no more frames will ever be produced by this stage.
-  s.stage.onLost = () => suspender(s);
+  // A lost device cannot recover inside this stage. Restore the DOM and cancel
+  // the shared loop instead of spending one rAF callback per frame forever.
+  s.stage.onLost = () => { suspender(s); stop(s); };
 
   if (document.hidden) suspender(s);
 
   /** @param {number} now */
   const frame = (now) => {
     s.raf = requestAnimationFrame(frame);
+
+    // Devices may be lost between any two frames. onLost restores the DOM,
+    // and this guard prevents the next scheduled frame from hiding it again.
+    if (!s.stage.ready) { suspender(s); return; }
 
     /**
      * Scroll velocity in pixels per second, normalised so 1800px/s reads as
@@ -277,16 +291,14 @@ function start(s) {
     const tier = s.budget?.tier;
     if (tier === 'minimal') { suspender(s); return; }
     if (s.suspenso) retomar(s);
-    const scale = tier === 'reduced' ? 0.45 : 1;
+    const strengthScale = tier === 'reduced' ? 0.45 : 1;
 
     s.registry.measure();
 
     const t = (now - s.t0) / 1000;
     for (const item of s.items) {
       if (!item.visible) continue;
-      const base = item.opts.strength ?? 0.5;
-      item.opts.strength = base;
-      item.update(t, s.velocity * scale, s.pointer);
+      item.update(t, s.velocity, s.pointer, strengthScale);
     }
     s.stage.render(s.items);
   };

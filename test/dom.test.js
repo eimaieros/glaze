@@ -15,6 +15,8 @@ import { JSDOM } from 'jsdom';
 
 let dom;
 let glaze, destroyAll;
+const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+const originalCreateImageBitmap = globalThis.createImageBitmap;
 
 beforeEach(async () => {
   dom = new JSDOM(`<!DOCTYPE html><html><body>
@@ -49,6 +51,10 @@ afterEach(() => {
                    'requestAnimationFrame', 'cancelAnimationFrame']) {
     delete globalThis[k];
   }
+  if (originalNavigator) Object.defineProperty(globalThis, 'navigator', originalNavigator);
+  else delete globalThis.navigator;
+  if (originalCreateImageBitmap) globalThis.createImageBitmap = originalCreateImageBitmap;
+  else delete globalThis.createImageBitmap;
 });
 
 const settle = () => new Promise((r) => setTimeout(r, 20));
@@ -88,6 +94,34 @@ test('destroy() after a degraded start does not throw', async () => {
   await settle();
   assert.doesNotThrow(() => g.destroy());
   assert.doesNotThrow(() => g.destroy(), 'and is idempotent');
+});
+
+test('destroy() during asynchronous GPU startup cannot resurrect the handle', async () => {
+  const device = {
+    lost: new Promise(() => {}),
+    destroy() {},
+  };
+  const gpu = {
+    getPreferredCanvasFormat: () => 'bgra8unorm',
+    async requestAdapter() {
+      await new Promise((r) => setTimeout(r, 5));
+      return { requestDevice: async () => device };
+    },
+  };
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { gpu },
+  });
+  dom.window.HTMLCanvasElement.prototype.getContext = () => ({ configure() {} });
+
+  const el = dom.window.document.querySelector('#a');
+  const g = glaze(el);
+  g.destroy();
+  await settle();
+
+  assert.equal(g.active, false);
+  assert.equal(g.elements.length, 0, 'an awaited continuation must not add a layer later');
+  assert.equal(el.style.visibility, '', 'the destroyed handle must never hide its image');
 });
 
 test('several calls with different effects still leave the page alone', async () => {

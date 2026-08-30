@@ -8,6 +8,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- Destroying a handle while WebGPU or an image is still loading can no longer
+  resurrect that handle, hide its DOM element, or join the shared render loop.
+- A lost device restores the DOM, stops the shared animation loop, and stays
+  suspended instead of immediately hiding the restored content again.
+- The `reduced` framebudget tier now scales the effect strength itself, so
+  position-driven effects such as `reveal` genuinely reduce too.
+
 - **The quad drifted when the layout changed without a scroll.** The dirty flag
   was set by two events and both are about the viewport, but an element's rect
   can move while the viewport sits perfectly still: a webfont lands and the

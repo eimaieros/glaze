@@ -236,6 +236,20 @@ test('update() packs the uniforms in the order the shader reads them', async () 
   assert.deepEqual([...layer.uniforms].map((n) => +n.toFixed(5)), expected);
 });
 
+test('adaptive quality reduces every effect strength, not only velocity', async () => {
+  const log = [];
+  globalThis.createImageBitmap = async () => ({ width: 2, height: 2, close() {} });
+  const layer = new Layer(fakeImg(log), fakeStage(log), EFFECTS.reveal, 'reveal',
+    { strength: 0.8 });
+  await layer.load();
+
+  // reveal is position-driven and ignores velocity. Scaling only velocity,
+  // as the shared loop used to do, left this effect at full cost and strength.
+  layer.update(1, 0.75, { x: 0, y: 0, near: 0 }, 0.45);
+  assert.equal(+layer.uniforms[5].toFixed(5), 0.36);
+  assert.equal(layer.uniforms[7], 0.75, 'velocity keeps its physical meaning');
+});
+
 test('a caller-supplied extra reaches the uniform buffer', () => {
   const log = [];
   globalThis.createImageBitmap = async () => ({ width: 2, height: 2, close() {} });

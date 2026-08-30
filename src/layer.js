@@ -185,14 +185,15 @@ export class Layer {
    * @param {number} time seconds
    * @param {number} velocity normalised, signed
    * @param {{x:number,y:number,near:number}} pointer
+   * @param {number} [strengthScale=1] adaptive-quality multiplier
    */
-  update(time, velocity, pointer) {
+  update(time, velocity, pointer, strengthScale = 1) {
     const device = this.stage.device;
     if (!this.ready || !device || !this.uniformBuffer) return;
     const u = this.uniforms;
     u[0] = this.clip[0]; u[1] = this.clip[1]; u[2] = this.clip[2]; u[3] = this.clip[3];
     u[4] = this.progress;
-    u[5] = this.opts.strength ?? 0.5;
+    u[5] = (this.opts.strength ?? 0.5) * strengthScale;
     u[6] = time;
     u[7] = velocity;
     u[8] = this.aspect;

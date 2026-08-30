@@ -143,8 +143,10 @@ test('every path that stops drawing hands the DOM back first', async () => {
     'the old render-nothing branch is back — it deletes the images');
   assert.match(src, /visibilitychange/,
     'a hidden tab suspends rAF; the DOM has to come back');
-  assert.match(src, /stage\.onLost = \(\) => suspender\(s\)/,
-    'a lost device produces no more frames — restore the images');
+  assert.match(src, /stage\.onLost = \(\) => \{ suspender\(s\); stop\(s\); \}/,
+    'a lost device restores the images and stops the now-useless loop');
+  assert.match(src, /if \(!s\.stage\.ready\) \{ suspender\(s\); return; \}/,
+    'the next scheduled frame must not resume after a lost device');
 
   // Order matters: show the elements, then clear the canvas. The other way
   // round leaves one frame with neither.

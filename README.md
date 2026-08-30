@@ -6,9 +6,9 @@ WebGPU shader driven by scroll. If anything fails, the page keeps its images.
 [![CI](https://github.com/eimaieros/glaze/actions/workflows/ci.yml/badge.svg)](https://github.com/eimaieros/glaze/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![No dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
-![16.3 KB minified](https://img.shields.io/badge/minified-16.3%20KB-informational)
+![16.4 KB minified](https://img.shields.io/badge/minified-16.4%20KB-informational)
 
-No dependencies. 16.3 KB minified, 6.6 KB gzipped. Ships TypeScript types.
+No dependencies. 16.4 KB minified, 6.6 KB gzipped. Ships TypeScript types.
 
 ```js
 glaze('#hero img', { effect: 'displace' });
@@ -534,7 +534,7 @@ Also exported: `EFFECTS`, `Stage`, `Layer`, `destroyAll()`.
 ## Tests
 
 ```bash
-npm test          # 86 tests, no browser, no GPU
+npm test          # 88 tests, no browser, no GPU
 open test/visual.html   # the part Node cannot check: is anything visible?
 npm run check     # types + tests
 ```

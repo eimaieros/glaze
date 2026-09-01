@@ -48,7 +48,9 @@ untouched and visible.
 ## Install
 
 ```bash
-npm install github:eimaieros/glaze
+# Pinned to a release. Without the tag npm gives you whatever `main`
+# is right now, which is not a dependency, it is a subscription.
+npm install github:eimaieros/glaze#v0.1.0
 ```
 
 From the repository rather than from npm, and that is on purpose: `glaze` on

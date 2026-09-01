@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.0] — 2026-09-01
+
+First tagged release. Everything below shipped in it.
+
+There was no tag before this one, and that was the problem: the README says
+`npm install github:eimaieros/glaze`, which resolves to whatever `main` happens
+to be at that moment. A version in package.json that no tag ever pointed at is
+the same defect this project keeps finding elsewhere — a number stated with
+nothing behind it.
+
 ### Fixed
 
 - Destroying a handle while WebGPU or an image is still loading can no longer

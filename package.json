@@ -48,7 +48,7 @@
     "@webgpu/types": "^0.1.72",
     "jsdom": "^30.0.1",
     "typescript": "^7.0.2",
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.28.2"
   },
   "bugs": {
     "url": "https://github.com/eimaieros/glaze/issues"

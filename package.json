@@ -45,8 +45,8 @@
   "homepage": "https://rodrigofigueiredo.dev/glaze/",
   "sideEffects": false,
   "devDependencies": {
-    "@webgpu/types": "^0.1.72",
-    "jsdom": "^30.0.1",
+    "@webgpu/types": "^0.1.74",
+    "jsdom": "^30.1.1",
     "typescript": "^7.0.2",
     "esbuild": "^0.28.2"
   },

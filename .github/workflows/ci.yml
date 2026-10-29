@@ -62,6 +62,6 @@ jobs:
       # they were written and both went quietly false the moment a module was
       # added. A number typed into prose is a measurement with no instrument
       # behind it; this is the instrument. contagem.js above is the same idea
-      # pointed at the test count, which drifted the same way: the README said
-      # 86 and CONTRIBUTING said 83, on the same commit.
+      # pointed at the test count, which drifted the same way: two files
+      # stated two different counts on the same commit.
       - run: npm run size

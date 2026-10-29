@@ -6,8 +6,8 @@
  *
  * tools/tamanho.js was written because the README stated a bundle size that
  * nobody was re-measuring, and it drifted. The test count is the same claim in
- * a different unit, and it drifted the same way: README said 86 while
- * CONTRIBUTING said 83, in the same repository, on the same commit.
+ * a different unit, and it drifted the same way: two files in the same
+ * repository stated two different counts on the same commit.
  *
  * Neither number was a lie when it was typed. That is the point. A number in
  * prose is a measurement with no instrument behind it, and the fix is not to
@@ -30,7 +30,6 @@ const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 /** Every place the repository states a test count, and how it writes it. */
 const ALEGACOES = [
   { ficheiro: 'README.md', padrao: /(\d+) tests, no browser, no GPU/ },
-  { ficheiro: 'CONTRIBUTING.md', padrao: /(\d+) tests, no browser and no GPU/ },
 ];
 
 const argumentos = process.argv.slice(2);

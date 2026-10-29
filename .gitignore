@@ -2,3 +2,7 @@ node_modules/
 types/
 *.log
 .DS_Store
+
+# Local notes
+*.md
+!README.md

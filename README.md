@@ -10,6 +10,8 @@ WebGPU shader driven by scroll. If anything fails, the page keeps its images.
 
 No dependencies. 17.2 KB minified, 6.9 KB gzipped. Ships TypeScript types.
 
+[![glaze: a contour field warped by the displacement shader, driven by scroll](.github/preview.webp)](https://rodrigofigueiredo.dev/glaze/)
+
 ```js
 glaze('#hero img', { effect: 'displace' });
 ```

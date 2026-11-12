@@ -187,11 +187,26 @@ export function glaze(target, options = {}) {
     }
   })();
 
-  return {
+  /**
+   * The visitor can turn reduced motion on while the page is open. The check
+   * above only covers the moment glaze was called, so the effect would have
+   * kept running for someone who had just asked it to stop. Turned on, it
+   * now ends the effect the same way destroy() does, image restored.
+   */
+  const motionQuery = respectReducedMotion ? reducedMotionQuery() : null;
+  /** @param {{ matches?: boolean }} event */
+  const onMotionChange = (event) => {
+    if (event?.matches === true) handle.destroy();
+  };
+  motionQuery?.addEventListener?.('change', onMotionChange);
+
+  const handle = {
     elements: created,
     get active() { return !destroyed && s.stage.ready && created.some((item) => item.ready); },
     destroy() {
+      if (destroyed) return;
       destroyed = true;
+      motionQuery?.removeEventListener?.('change', onMotionChange);
       pending?.destroy();
       for (const item of created) {
         s.registry.remove(item);
@@ -201,6 +216,19 @@ export function glaze(target, options = {}) {
       if (!s.items.size) stop(s);
     },
   };
+  return handle;
+}
+
+/**
+ * The live prefers-reduced-motion query, or null where there is none.
+ * @returns {{ addEventListener?: Function, removeEventListener?: Function } | null}
+ */
+function reducedMotionQuery() {
+  try {
+    return typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

@@ -6,9 +6,9 @@ WebGPU shader driven by scroll. If anything fails, the page keeps its images.
 [![CI](https://github.com/eimaieros/glaze/actions/workflows/ci.yml/badge.svg)](https://github.com/eimaieros/glaze/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![No dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
-![17.2 KB minified](https://img.shields.io/badge/minified-17.2%20KB-informational)
+![17.5 KB minified](https://img.shields.io/badge/minified-17.5%20KB-informational)
 
-No dependencies. 17.2 KB minified, 6.9 KB gzipped. Ships TypeScript types.
+No dependencies. 17.5 KB minified, 7 KB gzipped. Ships TypeScript types.
 
 [![glaze: a contour field warped by the displacement shader, driven by scroll](.github/preview.webp)](https://rodrigofigueiredo.dev/glaze/)
 
@@ -499,7 +499,7 @@ the test suite, where the message can say why.
 | device lost mid-session | elements restored, canvas removed, `ready` flips false |
 | image fails to decode | that element is skipped, the others still run |
 | `decode()` never settles | given up on after 250ms — see below |
-| `prefers-reduced-motion` | returns an inert handle, nothing is touched |
+| `prefers-reduced-motion` | returns an inert handle, nothing is touched; turned on while the page is open, it ends the effect and restores the image, as `destroy()` does |
 | framebudget says `minimal` | elements restored, canvas cleared, loop keeps watching |
 | tab goes to the background | elements restored — Chrome suspends rAF entirely |
 | tab comes back | elements hidden again, drawing resumes |
@@ -539,7 +539,7 @@ Also exported: `EFFECTS`, `Stage`, `Layer`, `destroyAll()`.
 ## Tests
 
 ```bash
-npm test          # 91 tests, no browser, no GPU
+npm test          # 94 tests, no browser, no GPU
 open test/visual.html   # the part Node cannot check: is anything visible?
 npm run check     # types + tests
 ```

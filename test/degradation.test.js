@@ -56,6 +56,51 @@ test('respectReducedMotion: false is honoured', () => {
   assert.deepEqual(g.elements, []);
 });
 
+/** A prefers-reduced-motion query that can be flipped while the test runs. */
+function motionSetting() {
+  const listeners = new Set();
+  const query = {
+    matches: false,
+    addEventListener: (_type, fn) => listeners.add(fn),
+    removeEventListener: (_type, fn) => listeners.delete(fn),
+  };
+  globalThis.matchMedia = () => query;
+  return {
+    turnOn() {
+      query.matches = true;
+      for (const fn of [...listeners]) fn({ matches: true });
+    },
+    listening: () => listeners.size,
+  };
+}
+
+test('turning reduced motion on while the page is open ends the effect', () => {
+  const setting = motionSetting();
+  const el = { style: { visibility: '' } };
+  const g = glaze([el], { effect: 'displace' });
+  assert.equal(setting.listening(), 1, 'the handle follows the setting');
+
+  setting.turnOn();
+
+  assert.equal(setting.listening(), 0, 'it ended the effect and let go of the listener');
+  assert.equal(g.active, false);
+  assert.equal(el.style.visibility, '', 'the element is as it was');
+  assert.doesNotThrow(() => g.destroy(), 'a second destroy() is a no-op');
+});
+
+test('destroy() lets go of the reduced-motion listener', () => {
+  const setting = motionSetting();
+  const g = glaze([{ style: {} }], { effect: 'rgb' });
+  g.destroy();
+  assert.equal(setting.listening(), 0);
+});
+
+test('respectReducedMotion: false does not listen for the setting', () => {
+  const setting = motionSetting();
+  glaze([{ style: {} }], { effect: 'rgb', respectReducedMotion: false });
+  assert.equal(setting.listening(), 0);
+});
+
 test('Stage.init resolves false without WebGPU rather than throwing', async () => {
   const s = new Stage({ document: null });
   const ok = await s.init();

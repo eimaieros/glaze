@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Node 20 reached end-of-life on 2026-04-30 and jsdom 30 already
+        # Node 20 reached end-of-life on 2026-04-30 and jsdom (30 and 31) already
         # refuses to install on it (engines: ^22.22.2 || ^24.15.0 || >=26).
         # The library itself has no runtime dependencies and runs fine on 20 -
         # it is the test harness that needs 22. Pinning jsdom back so an

@@ -50,7 +50,10 @@ async function medir() {
   return { min: kb(bytes.length), gzip: kb(gzipSync(bytes, { level: 9 }).length) };
 }
 
-const PADRAO = /(\d+\.\d+) KB minified, (\d+\.\d+) KB gzipped/;
+// A round number such as 7 KB is just as valid as 6.9 KB. Requiring a decimal
+// made --fix write "7 KB gzipped" and then fail to read its own sentence on
+// the next run. framebudget fixed the same pattern the same way.
+const PADRAO = /(\d+(?:\.\d+)?) KB minified, (\d+(?:\.\d+)?) KB gzipped/;
 
 const real = await medir();
 const readme = readFileSync(README, 'utf8');
